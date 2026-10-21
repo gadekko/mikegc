@@ -1,11 +1,30 @@
-# Mike
+# MikeGC
 
-![Mike](docs/assets/link-image.jpg)
+![MikeGC](docs/assets/mikegc-banner.jpg)
 
-Mike (MikeOSS) is an open-source legal AI platform for document review,
-drafting, and legal research.
+MikeGC is a fork of [Mike (MikeOSS)](https://mikeoss.com), the open-source
+legal AI platform for document review, drafting, and legal research, adapted
+for in-house legal teams.
 
-It combines a Next.js frontend, an Express backend, Supabase Auth/Postgres,
+> [!NOTE]
+> MikeGC is a work in progress. Features and setup may change without notice.
+
+## In-house features
+
+Included now:
+
+- **Playbooks**: turn your team's Word or PDF negotiation guide into
+  structured rules and review contracts against them. See
+  [Playbooks](docs/playbooks.md).
+
+Planned, starting with:
+
+- **Intake**: receive and triage requests for the legal team.
+- **Horizon scanning**: track regulatory updates relevant to the business.
+
+## Built on Mike
+
+MikeGC keeps the full Mike platform. It combines a Next.js frontend, an Express backend, Supabase Auth/Postgres,
 and Cloudflare R2-compatible object storage.
 
 Website: [mikeoss.com](https://mikeoss.com)
