@@ -23,6 +23,7 @@ import {
   downloadsRouter,
 } from "./modules/downloads/downloads.routes";
 import { sourceDocumentsRouter } from "./modules/source-documents/sourceDocuments.routes";
+import { intakeRouter } from "./modules/intake/intake.routes";
 import { auditRouter } from "./modules/audit/audit.routes";
 import { authRouter } from "./modules/auth/auth.routes";
 import { uploadSessionsRouter } from "./modules/uploads/uploads.routes";
@@ -131,6 +132,10 @@ const chatCreateLimiter = makeLimiter({
   max: envInt("RATE_LIMIT_CHAT_CREATE_MAX", 60),
 });
 
+const intakeSubmitLimiter = makeLimiter({
+  windowMs: minutes(1),
+  max: 30,
+});
 const exportLimiter = makeLimiter({
   windowMs: hours(envInt("RATE_LIMIT_EXPORT_WINDOW_HOURS", 1)),
   max: envInt("RATE_LIMIT_EXPORT_MAX", 10),
@@ -259,6 +264,8 @@ app.use(
 );
 
 app.use(generalLimiter);
+app.post("/intake/:orgId/requests", intakeSubmitLimiter);
+app.use("/intake", express.json({ limit: "128kb" }));
 
 app.post("/auth/login", authLoginIpLimiter);
 app.post(["/auth/signup", "/auth/password-reset"], authEmailLimiter);
@@ -349,6 +356,7 @@ app.use("/user/memory", userMemoryRouter);
 app.use("/user", userRouter);
 app.use("/download", downloadsRouter);
 app.use("/documents", sourceDocumentsRouter);
+app.use("/intake", intakeRouter);
 app.use("/audit", auditRouter);
 app.use("/playbooks", playbooksRouter);
 app.use("/upload-sessions", uploadSessionsRouter);
