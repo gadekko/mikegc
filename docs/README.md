@@ -12,6 +12,8 @@
 
 ## Features and clients
 
+- [Legal requests](intake.md): intake setup, access, retention and verification
+
 - [Organization offboarding](organization-offboarding.md) — member removal,
   account deletion, shared-work transfer and owner-only recovery
 - [MCP connectors](connectors.md) — hosted presets, custom servers, OAuth,

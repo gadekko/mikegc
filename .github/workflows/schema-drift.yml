@@ -165,6 +165,20 @@ jobs:
       - name: Concurrent document lifecycle operations
         run: node backend/scripts/test-document-lifecycle-concurrency.mjs
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install backend test dependencies
+        run: npm ci --prefix backend
+      - name: Intake transactions, concurrency and lifecycle
+        run: |
+          CONTAINER="$(docker ps --filter 'name=supabase_db_' --format '{{.Names}}')"
+          test -n "$CONTAINER"
+          MIKE_TEST_POSTGRES_CONTAINER="$CONTAINER" npm test --prefix backend -- \
+            src/modules/intake/__tests__/intake.postgres.test.ts \
+            src/__tests__/integration/orgLifecycle.postgres.test.ts \
+            src/__tests__/integration/orgDepartureRetention.postgres.test.ts
+
       - name: Compare fingerprints
         run: |
           if diff -u /tmp/upgraded.txt /tmp/fresh.txt; then

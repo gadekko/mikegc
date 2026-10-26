@@ -101,4 +101,5 @@ jobs:
       - name: Run stack integration tests
         working-directory: backend
         run: |
-          npx vitest run src/__tests__/integration/*.supabase.test.ts
+          # Queue tests share the stack and claim globally; keep fixture jobs isolated in time.
+          npx vitest run --no-file-parallelism src/__tests__/integration/*.supabase.test.ts
