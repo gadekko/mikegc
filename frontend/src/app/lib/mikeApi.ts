@@ -4495,3 +4495,33 @@ export async function deletePlaybook(playbookId: string): Promise<void> {
         method: "DELETE",
     });
 }
+
+// Legal intake uses explicit organization scope, including detail deep links.
+export function getIntakeConfiguration(orgId: string) {
+    return apiRequest<import("@mike/contracts").IntakeConfiguration>(`/intake/${encodeURIComponent(orgId)}/configuration`);
+}
+export function getIntakeReviewers(orgId: string) {
+    return apiRequest<import("@mike/contracts").IntakeReviewer[]>(`/intake/${encodeURIComponent(orgId)}/reviewers`);
+}
+export function configureIntake(orgId: string, body: import("@mike/contracts").IntakeConfigurationCommand) {
+    return apiRequest<import("@mike/contracts").IntakeReceipt>(`/intake/${encodeURIComponent(orgId)}/configuration`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+export function listIntakeRequests(orgId: string, query: { view: "mine" | "queue"; offset?: number; search?: string; state?: string; assignee?: string }) {
+    const params = new URLSearchParams(Object.entries(query).map(([k,v]) => [k, String(v)]));
+    return apiRequest<import("@mike/contracts").IntakeRequest[]>(`/intake/${encodeURIComponent(orgId)}/requests?${params}`);
+}
+export function submitIntakeRequest(orgId: string, body: import("@mike/contracts").IntakeSubmission) {
+    return apiRequest<import("@mike/contracts").IntakeReceipt>(`/intake/${encodeURIComponent(orgId)}/requests`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+export function getIntakeRequest(orgId: string, id: string) {
+    return apiRequest<import("@mike/contracts").IntakeRequest>(`/intake/${encodeURIComponent(orgId)}/requests/${encodeURIComponent(id)}`);
+}
+export function getIntakeMessages(orgId: string, id: string, offset = 0) {
+    return apiRequest<import("@mike/contracts").IntakeMessage[]>(`/intake/${encodeURIComponent(orgId)}/requests/${encodeURIComponent(id)}/messages?offset=${offset}&limit=100`);
+}
+export function getIntakeEvents(orgId: string, id: string, offset = 0) {
+    return apiRequest<import("@mike/contracts").IntakeEvent[]>(`/intake/${encodeURIComponent(orgId)}/requests/${encodeURIComponent(id)}/events?offset=${offset}&limit=100`);
+}
+export function commandIntakeRequest(orgId: string, id: string, action: import("@mike/contracts").IntakeAction, body: import("@mike/contracts").IntakeCommand) {
+    return apiRequest<import("@mike/contracts").IntakeReceipt>(`/intake/${encodeURIComponent(orgId)}/requests/${encodeURIComponent(id)}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}

@@ -168,6 +168,8 @@ const SUPPORTABLE: ReadonlySet<UserErrorKind> = new Set([
  * real failure falls through to the status-based classification below.
  */
 export const CODE_KINDS: Readonly<Record<string, UserErrorKind>> = {
+    intake_conflict: "conflict",
+    intake_paused: "conflict",
     // Throttling
     rate_limited: "rate_limited",
     upload_session_control_rate_limit: "rate_limited",

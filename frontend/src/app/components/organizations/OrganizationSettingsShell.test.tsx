@@ -106,6 +106,7 @@ describe("the sections each role is offered", () => {
       "Members",
       "Audit log",
       "Bring Your Own Keys",
+      "Legal requests",
       "Privacy & Data",
     ]);
   });

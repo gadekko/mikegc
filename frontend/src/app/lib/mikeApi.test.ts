@@ -1,3 +1,4 @@
+import {getIntakeConfiguration,getIntakeReviewers,configureIntake,listIntakeRequests,submitIntakeRequest,getIntakeRequest,getIntakeMessages,getIntakeEvents,commandIntakeRequest} from "./mikeApi";
 import { listOrgPrivateContent, setOrgPrivateContentPermission, openOrgPrivateContent, closeOrgPrivateContent } from "./mikeApi";
 import { setUserProfilePhoto, listDeletedOrganizations, restoreOrganization } from "./mikeApi";
 import { listOrgDepartures, reassignOrgDepartureArchives, deleteOrgDepartureArchives } from "./mikeApi";
@@ -3663,5 +3664,36 @@ describe("organization private content", () => {
         expect(lastFetchCall()).toMatchObject({ url: "/api/orgs/org-1/private-content/document/doc-1/open", init: { method: "POST" } });
         await closeOrgPrivateContent("org-1", "document", "doc-1");
         expect(lastFetchCall()).toMatchObject({ url: "/api/orgs/org-1/private-content/document/doc-1", init: { method: "DELETE" } });
+    });
+});
+
+
+describe("intake API boundary", () => {
+    it("encodes scope and forwards immutable command bodies", async () => {
+        fetchMock.mockImplementation(async () => jsonResponse({}));
+        const scope = "org/id";
+        const id = "request/id";
+        const config = { command_id: "command", expected_revision: 1, enabled: true, reviewer_ids: ["reviewer"] };
+        const submission = { id, command_id: "create", category: "general" as const, subject: "Subject", description: "Exact  text." };
+        const command = { command_id: "answer", expected_version: 2, body: "Exact answer.\n" };
+        const cases: [() => Promise<unknown>, string, string, unknown?][] = [
+            [()=>getIntakeConfiguration(scope),"configuration","GET"],
+            [()=>getIntakeReviewers(scope),"reviewers","GET"],
+            [()=>configureIntake(scope,config),"configuration","PUT",config],
+            [()=>listIntakeRequests(scope,{view:"queue",offset:50,search:"a & b",state:"in_review",assignee:"person"}),"requests?view=queue&offset=50&search=a+%26+b&state=in_review&assignee=person","GET"],
+            [()=>submitIntakeRequest(scope,submission),"requests","POST",submission],
+            [()=>getIntakeRequest(scope,id),"requests/request%2Fid","GET"],
+            [()=>getIntakeMessages(scope,id),"requests/request%2Fid/messages?offset=0&limit=100","GET"],
+            [()=>getIntakeMessages(scope,id,100),"requests/request%2Fid/messages?offset=100&limit=100","GET"],
+            [()=>getIntakeEvents(scope,id),"requests/request%2Fid/events?offset=0&limit=100","GET"],
+            [()=>getIntakeEvents(scope,id,100),"requests/request%2Fid/events?offset=100&limit=100","GET"],
+            [()=>commandIntakeRequest(scope,id,"answer",command),"requests/request%2Fid/answer","POST",command],
+        ];
+        for(const [run,path,method,body] of cases) {
+            await run(); const call=lastFetchCall();
+            expect(call.url).toBe(`/api/intake/org%2Fid/${path}`);
+            expect(call.init.method??"GET").toBe(method);
+            if(body)expect(JSON.parse(String(call.init.body))).toEqual(body);
+        }
     });
 });

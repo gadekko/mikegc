@@ -38,6 +38,7 @@ vi.mock("next/image", () => ({
 }));
 
 vi.mock("@/app/lib/mikeApi", () => ({
+  getIntakeConfiguration: vi.fn(async () => ({ configured: false })),
   listProjectsPage: vi.fn(),
   listProjectChats: vi.fn(async () => []),
   listTabularReviews: vi.fn(async () => []),

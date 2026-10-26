@@ -1,4 +1,5 @@
 "use client";
+import { pushWithDraftGuard } from "@/app/hooks/navigationGuard";
 
 import {
   createContext,
@@ -77,7 +78,7 @@ export function organizationSettingsHref(
 }
 
 type OrganizationSettingsSection =
-  "general" | "members" | "audit" | "providers" | "privacy-data";
+  "general" | "members" | "audit" | "providers" | "privacy-data" | "intake";
 
 export function OrganizationSettingsProvider({
   orgId,
@@ -137,7 +138,7 @@ export function OrganizationSettingsProvider({
             <PillButtonUI
               tone="white"
               size="sm"
-              onClick={() => router.push("/settings/organizations")}
+              onClick={() => pushWithDraftGuard(router, "/settings/organizations")}
             >
               Your organizations
             </PillButtonUI>
@@ -222,6 +223,11 @@ export function OrganizationSettingsFrame({
       // Its actions reach every member's work, so it is its owners' alone.
       ...(isOwner
         ? [
+            {
+              id: "intake",
+              label: "Legal requests",
+              href: organizationSettingsHref(orgId, "intake"),
+            },
             {
               id: "privacy-data",
               // Named as the same page is in a person's own settings.

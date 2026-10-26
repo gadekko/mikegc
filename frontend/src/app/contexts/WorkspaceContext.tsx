@@ -201,6 +201,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     const setWorkspace = useCallback(
         (next: string) => {
+            if (next !== workspaceId && !window.dispatchEvent(new Event("mike:before-workspace-change", { cancelable: true }))) return;
             const known =
                 next === PERSONAL_WORKSPACE ||
                 (organizations ?? []).some((org) => org.id === next);
@@ -228,7 +229,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                     // Unknown stays unknown: nothing is switched.
                 });
         },
-        [organizations, userId],
+        [organizations, userId, workspaceId],
     );
 
     const value = useMemo(

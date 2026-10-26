@@ -1,4 +1,5 @@
 "use client";
+import { pushWithDraftGuard } from "@/app/hooks/navigationGuard";
 
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -69,7 +70,7 @@ export function SettingsShell({
                                                             : undefined
                                                     }
                                                     onClick={() =>
-                                                        router.push(tab.href)
+                                                        pushWithDraftGuard(router, tab.href)
                                                     }
                                                     className={settingsTabButtonClassName(
                                                         active,

@@ -1,4 +1,7 @@
 "use client";
+import { pushWithDraftGuard } from "@/app/hooks/navigationGuard";
+
+import { useIntakeNavigation } from "@/app/components/intake/useIntakeNavigation";
 
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 
@@ -149,7 +152,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
         // beside its current one without a navigation; from anywhere else
         // the chat arrives in the URL it reads on mount.
         if (onAssistantPage) requestSideChat(chatId);
-        else router.push(`/assistant?side=${encodeURIComponent(chatId)}`);
+        else pushWithDraftGuard(router, `/assistant?side=${encodeURIComponent(chatId)}`);
     }
     const {
         statuses: assistantHistoryStatuses,
@@ -210,6 +213,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
         setWorkspace,
     } = useWorkspace();
     const workspaceParam = workspaceId ?? undefined;
+    const showIntake = useIntakeNavigation(userId, activeOrganization?.id);
     // The switcher is navigation: what was on screen belonged to the
     // workspace just left, so the new one opens at its home.
     //
@@ -234,7 +238,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
             return;
         }
         pendingWorkspaceRef.current = { id: next, name, from: pathname };
-        router.push(WORKSPACE_HOME);
+        if (!pushWithDraftGuard(router, WORKSPACE_HOME)) pendingWorkspaceRef.current = null;
     };
     useEffect(() => {
         const pending = pendingWorkspaceRef.current;
@@ -442,7 +446,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
     // the notice carries a real Retry.
     function handleSignOut() {
         void signOut()
-            .then(() => router.push("/"))
+            .then(() => pushWithDraftGuard(router, "/"))
             .catch((error) => {
                 notifyError(error, {
                     action: "sign out",
@@ -578,7 +582,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                 <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
                     {/* Nav items */}
                     <div className="pt-1.5">
-                        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+                        {[...NAV_ITEMS, ...(showIntake ? [{ href: "/intake", label: "Legal requests", icon: OrganizationSkeuoIcon }] : [])].map(({ href, label, icon: Icon }) => {
                             const isActive =
                                 href === "/assistant"
                                     ? pathname === href
@@ -589,7 +593,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                             return (
                                 <div key={href} className="px-1.5 py-0.5">
                                     <button
-                                        onClick={() => router.push(href)}
+                                        onClick={() => pushWithDraftGuard(router, href)}
                                         title={!isOpen ? label : ""}
                                         className={cn(
                                             "w-full h-8 flex items-center gap-2 px-2 py-2 rounded-md transition-colors text-left",
@@ -705,7 +709,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                                                                 )
                                                             }
                                                             onOpenProject={() =>
-                                                                router.push(
+                                                                pushWithDraftGuard(router,
                                                                     `/projects/${project.id}`,
                                                                 )
                                                             }
@@ -884,7 +888,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                                                             setCurrentChatId(
                                                                 chat.id,
                                                             );
-                                                            router.push(
+                                                            pushWithDraftGuard(router,
                                                                 chat.project_id
                                                                     ? `/projects/${chat.project_id}/assistant/chat/${chat.id}`
                                                                     : `/assistant/chat/${chat.id}`,
@@ -1005,7 +1009,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                                   </>
                               ) : null}
                               <DropdownItem
-                                  onSelect={() => router.push("/settings")}
+                                  onSelect={() => pushWithDraftGuard(router, "/settings")}
                                   className="h-8 gap-2 rounded-md px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-700 focus:text-gray-700 data-[selected=true]:text-gray-900 data-[selected=true]:hover:text-gray-900 data-[selected=true]:focus:text-gray-900"
                               >
                                   <SettingsSkeuoIcon className="h-4 w-4 text-black" />
@@ -1018,7 +1022,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                               {activeOrganization ? (
                                   <DropdownItem
                                       onSelect={() =>
-                                          router.push(
+                                          pushWithDraftGuard(router,
                                               `/organizations/${activeOrganization.id}/settings`,
                                           )
                                       }
