@@ -1,0 +1,563 @@
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AnchorHTMLAttributes, ReactNode } from "react";
+import type { IntakeConfiguration, IntakeRequest } from "@mike/contracts";
+import { IntakeInbox, Inbox } from "./IntakeInbox";
+import { IntakeDetail, Detail } from "./IntakeDetail";
+import { Settings } from "./IntakeSettings";
+
+const mocks = vi.hoisted(() => ({
+  configuration: vi.fn(),
+  reviewers: vi.fn(),
+  configure: vi.fn(),
+  list: vi.fn(),
+  submit: vi.fn(),
+  request: vi.fn(),
+  messages: vi.fn(),
+  events: vi.fn(),
+  command: vi.fn(),
+  push: vi.fn(),
+  notify: vi.fn(),
+  workspace: {
+    accountId: "account-a",
+    workspaceId: "org-a",
+    activeOrganization: { id: "org-a" },
+  },
+}));
+vi.mock("@/app/lib/mikeApi", () => ({
+  getIntakeConfiguration: mocks.configuration,
+  getIntakeReviewers: mocks.reviewers,
+  configureIntake: mocks.configure,
+  listIntakeRequests: mocks.list,
+  submitIntakeRequest: mocks.submit,
+  getIntakeRequest: mocks.request,
+  getIntakeMessages: mocks.messages,
+  getIntakeEvents: mocks.events,
+  commandIntakeRequest: mocks.command,
+  isMfaRequiredError: (error: { code?: string }) =>
+    error?.code === "mfa_verification_required",
+}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
+vi.mock("next/link", () => ({
+  default: (props: AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />,
+}));
+vi.mock("@/app/contexts/WorkspaceContext", () => ({
+  useWorkspace: () => mocks.workspace,
+}));
+vi.mock("@/app/hooks/useItemWorkspace", () => ({ useItemWorkspace: vi.fn() }));
+vi.mock("@/app/components/organizations/OrganizationSettingsShell", () => ({
+  useOrganizationSettings: () => ({ orgId: "org-a", org: { role: "owner" } }),
+}));
+vi.mock("@/app/components/shared/PageHeader", () => ({
+  PageHeader: ({ children }: { children: ReactNode }) => (
+    <header>{children}</header>
+  ),
+}));
+vi.mock("@/app/lib/userFacingError", () => ({
+  describeError: () => ({ message: "Could not load requests." }),
+  notifyError: mocks.notify,
+}));
+vi.mock("@/app/components/popups/MfaVerificationPopup", () => ({
+  MfaVerificationPopup: ({
+    open,
+    onVerified,
+  }: {
+    open: boolean;
+    onVerified: () => void;
+  }) =>
+    open ? (
+      <button type="button" onClick={onVerified}>
+        Verify MFA
+      </button>
+    ) : null,
+}));
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+const configuration = (revision = 1): IntakeConfiguration => ({
+  configured: true,
+  enabled: true,
+  can_configure: true,
+  is_reviewer: true,
+  revision,
+  reviewer_ids: ["lawyer-a"],
+});
+const request = (overrides: Partial<IntakeRequest> = {}): IntakeRequest => ({
+  incarnation_id: "incarnation-a",
+  id: "request-a",
+  org_id: "org-a",
+  requester_id: "requester",
+  assignee_id: "lawyer-a",
+  category: "general",
+  subject: "Confidential request A",
+  description: "Request description",
+  requested_by_date: null,
+  timezone: null,
+  state: "in_review",
+  version: 1,
+  created_at: "2026-10-26T10:00:00Z",
+  updated_at: "2026-10-26T10:00:00Z",
+  requester_name: "Requester",
+  assignee_name: "Lawyer A",
+  capabilities: {
+    assign: true,
+    ask: true,
+    reply: false,
+    publish: true,
+    cancel: false,
+  },
+  ...overrides,
+});
+const receipt = {
+  request_id: "request-a",
+  applied_version: 2,
+  message_id: null,
+  replayed: false,
+};
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  mocks.workspace = {
+    accountId: "account-a",
+    workspaceId: "org-a",
+    activeOrganization: { id: "org-a" },
+  };
+  mocks.configuration.mockResolvedValue(configuration());
+  mocks.reviewers.mockResolvedValue([
+    {
+      user_id: "lawyer-a",
+      display_name: "Lawyer A",
+      email: "a@example.test",
+      is_reviewer: true,
+    },
+    {
+      user_id: "lawyer-b",
+      display_name: "Lawyer B",
+      email: "b@example.test",
+      is_reviewer: true,
+    },
+  ]);
+  mocks.list.mockResolvedValue([]);
+  mocks.request.mockResolvedValue(request());
+  mocks.messages.mockResolvedValue([]);
+  mocks.events.mockResolvedValue([]);
+  mocks.command.mockResolvedValue(receipt);
+  mocks.configure.mockResolvedValue({ ...receipt, request_id: null });
+  vi.spyOn(window, "confirm").mockReturnValue(false);
+});
+afterEach(() => vi.restoreAllMocks());
+
+describe("configuration revisions and MFA", () => {
+  it("keeps the loaded revision with a draft until an explicit conflict reload", async () => {
+    mocks.configuration
+      .mockResolvedValueOnce(configuration(1))
+      .mockResolvedValue(configuration(9));
+    mocks.configure.mockRejectedValue({ status: 409, code: "intake_conflict" });
+    render(<Settings orgId="org-a" />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
+    await act(async () => {});
+    expect(mocks.configuration).toHaveBeenCalledTimes(1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save intake settings" }),
+    );
+    await screen.findByRole("button", { name: "Reload settings" });
+    expect(mocks.configure.mock.calls[0][1]).toMatchObject({
+      expected_revision: 1,
+      reviewer_ids: ["lawyer-a", "lawyer-b"],
+    });
+    expect(screen.getByRole("checkbox", { name: /Lawyer B/ })).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Save intake settings" }),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Reload settings" }));
+    expect(mocks.configuration).toHaveBeenCalledTimes(1);
+    vi.mocked(window.confirm).mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Reload settings" }));
+    await waitFor(() => expect(mocks.configuration).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("checkbox", { name: /Lawyer B/ }),
+      ).not.toBeChecked(),
+    );
+  });
+
+  it("reconciles the original uncertain command after an MFA challenge", async () => {
+    mocks.configure
+      .mockRejectedValueOnce(new TypeError("Lost response"))
+      .mockRejectedValueOnce({
+        status: 403,
+        code: "mfa_verification_required",
+      });
+    render(<Settings orgId="org-a" />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save intake settings" }),
+    );
+    const verify = await screen.findByRole("button", { name: "Verify MFA" });
+    const original = structuredClone(mocks.configure.mock.calls[0][1]);
+    fireEvent.click(verify);
+    await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(3));
+    expect(mocks.configure.mock.calls.map((call) => call[1])).toEqual([
+      original,
+      original,
+      original,
+    ]);
+    await waitFor(() => expect(mocks.configuration).toHaveBeenCalledTimes(2));
+  });
+
+  it("retries the exact configuration command after successful MFA", async () => {
+    mocks.configure.mockRejectedValueOnce({
+      status: 403,
+      code: "mfa_verification_required",
+    });
+    render(<Settings orgId="org-a" />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save intake settings" }),
+    );
+    const verify = await screen.findByRole("button", { name: "Verify MFA" });
+    const original = structuredClone(mocks.configure.mock.calls[0][1]);
+    expect(
+      screen.getByRole("button", { name: "Save intake settings" }),
+    ).toBeDisabled();
+    fireEvent.click(verify);
+    await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(2));
+    expect(mocks.configure.mock.calls[1]).toEqual(["org-a", original]);
+    await waitFor(() => expect(mocks.configuration).toHaveBeenCalledTimes(2));
+  });
+
+  it("hides the owner roster after uncertain access denial while allowing command reconciliation", async () => {
+    mocks.configure
+      .mockRejectedValueOnce(new TypeError("lost response"))
+      .mockRejectedValueOnce({ status: 403 });
+    mocks.configuration
+      .mockResolvedValueOnce(configuration())
+      .mockReturnValue(new Promise(() => {}));
+    render(<Settings orgId="org-a" />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save intake settings" }),
+    );
+    await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("a@example.test")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save intake settings" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled();
+    const original = structuredClone(mocks.configure.mock.calls[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(3));
+    expect(mocks.configure.mock.calls[2]).toEqual(original);
+    expect(screen.queryByText("a@example.test")).not.toBeInTheDocument();
+  });
+});
+
+describe("request forms and list loading", () => {
+  it("does not hide a failed configuration behind a successful list", async () => {
+    const list = deferred<IntakeRequest[]>();
+    mocks.configuration.mockRejectedValue(
+      new Error("configuration unavailable"),
+    );
+    mocks.list.mockReturnValue(list.promise);
+    render(<Inbox orgId="org-a" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not load requests.",
+    );
+    await act(async () => list.resolve([]));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Could not load requests.",
+    );
+    expect(screen.queryByText("No requests found.")).not.toBeInTheDocument();
+  });
+
+  it("asks before closing a draft and retains its text when declined", async () => {
+    render(<Inbox orgId="org-a" />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "New request" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New request" }));
+    fireEvent.change(screen.getByLabelText("Subject"), {
+      target: { value: "Unsent question" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Subject")).toHaveValue("Unsent question");
+    vi.mocked(window.confirm).mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByLabelText("Subject")).not.toBeInTheDocument();
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it("reconciles a lost submission with the same request ID, command ID and text", async () => {
+    mocks.submit
+      .mockRejectedValueOnce(new TypeError("lost response"))
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockImplementation(async (_org: string, body: { id: string }) => ({
+        ...receipt,
+        request_id: body.id,
+      }));
+    render(<Inbox orgId="org-a" />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "New request" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New request" }));
+    fireEvent.change(screen.getByLabelText("Subject"), {
+      target: { value: "Business question" },
+    });
+    fireEvent.change(screen.getByLabelText("What do you need help with?"), {
+      target: { value: "  Exact request text\nwith newlines  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit request" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled(),
+    );
+    const original = structuredClone(mocks.submit.mock.calls[0]);
+    expect(original[1]).toMatchObject({
+      id: expect.any(String),
+      command_id: expect.any(String),
+      description: "  Exact request text\nwith newlines  ",
+    });
+    expect(mocks.submit.mock.calls[1]).toEqual(original);
+    expect(
+      screen.getByRole("button", { name: "Submit request" }),
+    ).toBeDisabled();
+    expect(mocks.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith(
+        `/intake/${original[1].id}?org=org-a`,
+      ),
+    );
+    expect(mocks.submit.mock.calls[2]).toEqual(original);
+  });
+
+  it("clears loaded rows immediately while a new workspace list is pending", async () => {
+    const next = deferred<IntakeRequest[]>();
+    mocks.list
+      .mockResolvedValueOnce([request()])
+      .mockReturnValueOnce(next.promise);
+    const view = render(<IntakeInbox />);
+    await screen.findByRole("link", { name: "Confidential request A" });
+    mocks.workspace = {
+      ...mocks.workspace,
+      workspaceId: "org-b",
+      activeOrganization: { id: "org-b" },
+    };
+    view.rerender(<IntakeInbox />);
+    expect(
+      screen.queryByRole("link", { name: "Confidential request A" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Loading requests");
+    await act(async () => next.resolve([]));
+    expect(screen.getByText("No requests found.")).toBeInTheDocument();
+  });
+
+  it("rejects stale A responses across A to B to A workspace navigation", async () => {
+    const oldA = deferred<IntakeRequest[]>();
+    const oldB = deferred<IntakeRequest[]>();
+    mocks.list
+      .mockReturnValueOnce(oldA.promise)
+      .mockReturnValueOnce(oldB.promise)
+      .mockResolvedValueOnce([request({ subject: "Fresh A" })]);
+    const view = render(<IntakeInbox />);
+    mocks.workspace = {
+      ...mocks.workspace,
+      workspaceId: "org-b",
+      activeOrganization: { id: "org-b" },
+    };
+    view.rerender(<IntakeInbox />);
+    mocks.workspace = {
+      ...mocks.workspace,
+      workspaceId: "org-a",
+      activeOrganization: { id: "org-a" },
+    };
+    view.rerender(<IntakeInbox />);
+    await screen.findByRole("link", { name: "Fresh A" });
+    await act(async () => {
+      oldB.resolve([request({ subject: "Old B" })]);
+      oldA.resolve([request({ subject: "Old A" })]);
+    });
+    expect(screen.getByRole("link", { name: "Fresh A" })).toBeInTheDocument();
+    expect(screen.queryByText("Old A")).not.toBeInTheDocument();
+    expect(screen.queryByText("Old B")).not.toBeInTheDocument();
+  });
+});
+
+describe("reviewer draft, preview and recovery", () => {
+  it("preserves an unsent answer when saving assignment", async () => {
+    render(<Detail orgId="org-a" requestId="request-a" />);
+    const editor = await screen.findByLabelText("Message to the requester");
+    fireEvent.change(editor, { target: { value: "Unsent answer" } });
+    fireEvent.change(screen.getByLabelText("Assigned lawyer"), {
+      target: { value: "lawyer-b" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save assignment" }));
+    await waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText("Message to the requester")).toHaveValue(
+      "Unsent answer",
+    );
+    expect(mocks.command.mock.calls[0]).toEqual([
+      "org-a",
+      "request-a",
+      "assignment",
+      expect.objectContaining({ expected_version: 1, assignee_id: "lawyer-b" }),
+    ]);
+    expect(mocks.command.mock.calls[0][3]).not.toHaveProperty("body");
+  });
+
+  it("invalidates an edited preview and retries the exact approved body and version", async () => {
+    mocks.command
+      .mockRejectedValueOnce(new TypeError("lost response"))
+      .mockRejectedValueOnce(new TypeError("offline"));
+    render(<Detail orgId="org-a" requestId="request-a" />);
+    const editor = await screen.findByLabelText("Message to the requester");
+    fireEvent.change(editor, { target: { value: "First answer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview answer" }));
+    expect(
+      screen.getByRole("region", { name: "Answer preview" }),
+    ).toHaveTextContent("First answer");
+    fireEvent.change(editor, {
+      target: { value: "  Exact revised answer\nSecond line  " },
+    });
+    expect(
+      screen.queryByRole("button", { name: "Share answer and resolve" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Preview answer" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Share answer and resolve" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled(),
+    );
+    expect(mocks.command).toHaveBeenCalledTimes(2);
+    const original = structuredClone(mocks.command.mock.calls[0]);
+    expect(original[3]).toMatchObject({
+      body: "  Exact revised answer\nSecond line  ",
+      expected_version: 1,
+    });
+    expect(mocks.command.mock.calls[1]).toEqual(original);
+    expect(editor).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(mocks.command).toHaveBeenCalledTimes(3));
+    expect(mocks.command.mock.calls[2]).toEqual(original);
+  });
+
+  it("retains draft on 409 and requires a fresh preview at the refreshed version", async () => {
+    mocks.command.mockRejectedValueOnce({
+      status: 409,
+      code: "intake_conflict",
+    });
+    mocks.request
+      .mockResolvedValueOnce(request())
+      .mockResolvedValue(request({ version: 2 }));
+    render(<Detail orgId="org-a" requestId="request-a" />);
+    fireEvent.change(await screen.findByLabelText("Message to the requester"), {
+      target: { value: "Needs confirmation" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview answer" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Share answer and resolve" }),
+    );
+    await waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Share answer and resolve" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Message to the requester")).toHaveValue(
+      "Needs confirmation",
+    );
+    expect(mocks.command).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Preview answer" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Share answer and resolve" }),
+    );
+    await waitFor(() => expect(mocks.command).toHaveBeenCalledTimes(2));
+    expect(mocks.command.mock.calls[1][3]).toMatchObject({
+      expected_version: 2,
+      body: "Needs confirmation",
+    });
+    expect(mocks.command.mock.calls[1][3].command_id).not.toBe(
+      mocks.command.mock.calls[0][3].command_id,
+    );
+  });
+
+  it("hides revoked content immediately after an uncertain 403 while retaining the command", async () => {
+    const recheck = deferred<IntakeRequest>();
+    mocks.request
+      .mockResolvedValueOnce(request())
+      .mockReturnValue(recheck.promise);
+    mocks.command
+      .mockRejectedValueOnce(new TypeError("lost response"))
+      .mockRejectedValueOnce({ status: 403 });
+    render(<Detail orgId="org-a" requestId="request-a" />);
+    fireEvent.change(await screen.findByLabelText("Message to the requester"), {
+      target: { value: "Sensitive draft" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ask for information" }),
+    );
+    await waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(2));
+    expect(
+      screen.queryByText("Confidential request A"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Message to the requester"),
+    ).not.toBeInTheDocument();
+    const original = structuredClone(mocks.command.mock.calls[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(mocks.command).toHaveBeenCalledTimes(3));
+    expect(mocks.command.mock.calls[2]).toEqual(original);
+    await act(async () => recheck.reject({ status: 403 }));
+  });
+
+  it("does not display a late request response after the account changes", async () => {
+    const oldAccount = deferred<IntakeRequest>();
+    mocks.request
+      .mockReturnValueOnce(oldAccount.promise)
+      .mockResolvedValueOnce(request({ subject: "Current account request" }));
+    const view = render(<IntakeDetail orgId="org-a" requestId="request-a" />);
+    mocks.workspace = { ...mocks.workspace, accountId: "account-b" };
+    view.rerender(<IntakeDetail orgId="org-a" requestId="request-a" />);
+    await screen.findByText("Current account request");
+    await act(async () =>
+      oldAccount.resolve(request({ subject: "Previous account secret" })),
+    );
+    expect(
+      screen.queryByText("Previous account secret"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Current account request")).toBeInTheDocument();
+  });
+});
+
+it("filters the Legal queue by current reviewer", async () => {
+  render(<Inbox orgId="org-a" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Legal queue" }));
+  fireEvent.change(
+    await screen.findByRole("combobox", { name: "Filter by assigned lawyer" }),
+    { target: { value: "lawyer-b" } },
+  );
+  await waitFor(() =>
+    expect(mocks.list).toHaveBeenLastCalledWith(
+      "org-a",
+      expect.objectContaining({
+        view: "queue",
+        assignee: "lawyer-b",
+        offset: 0,
+      }),
+    ),
+  );
+});
