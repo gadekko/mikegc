@@ -154,6 +154,7 @@ describe.skipIf(!url || !key || !anon)(
         "messages",
         "events",
         "commands",
+        "purged_commands",
       ])
         expect(
           (await direct.from(`intake_${table}`).select("*")).error,

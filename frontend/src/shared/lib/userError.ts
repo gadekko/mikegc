@@ -169,6 +169,7 @@ const SUPPORTABLE: ReadonlySet<UserErrorKind> = new Set([
  */
 export const CODE_KINDS: Readonly<Record<string, UserErrorKind>> = {
     intake_conflict: "conflict",
+    intake_purged: "conflict",
     intake_paused: "conflict",
     // Throttling
     rate_limited: "rate_limited",

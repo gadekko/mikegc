@@ -74,6 +74,15 @@ create table if not exists public.intake_commands (
   foreign key(org_id,request_id) references public.intake_requests(org_id,id) on delete cascade
 );
 
+-- Keep only command identity after a content purge. An uncertain old submit
+-- must not recreate erased text; a deliberately new command remains allowed.
+create table if not exists public.intake_purged_commands (
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  actor_id uuid not null references auth.users(id) on delete cascade,
+  command_id uuid not null,
+  primary key(org_id,actor_id,command_id)
+);
+
 -- Membership reads never inherit content access from an administrative role.
 create or replace function public.intake_member_role(p_org uuid,p_actor uuid)
 returns text language sql stable set search_path=public,pg_temp as $$
@@ -108,6 +117,10 @@ returns jsonb language plpgsql set search_path=public,pg_temp as $$
 declare c public.intake_commands;
 begin
   if p_command is null then raise exception 'Command ID is required' using errcode='22023'; end if;
+  if exists(select 1 from public.intake_purged_commands
+    where org_id=p_org and actor_id=p_actor and command_id=p_command) then
+    raise exception 'The command belongs to purged request data' using errcode='P0004';
+  end if;
   select * into c from public.intake_commands where org_id=p_org and actor_id=p_actor and command_id=p_command;
   if not found then return null; end if;
   if c.action<>p_action or c.input<>p_input then
@@ -356,6 +369,9 @@ returns void language plpgsql set search_path=public,pg_temp as $$
 begin
   perform public.intake_lock_org(p_org,p_actor);
   if public.intake_member_role(p_org,p_actor)<>'owner' then raise exception 'Only the organization owner can delete intake data' using errcode='42501'; end if;
+  insert into public.intake_purged_commands(org_id,actor_id,command_id)
+    select org_id,actor_id,command_id from public.intake_commands
+    where org_id=p_org and request_id is not null on conflict do nothing;
   delete from public.intake_requests where org_id=p_org;
   insert into public.intake_events(org_id,actor_id,kind)
     select p_org,p_actor,'requests_purged' where exists(select 1 from public.intake_settings where org_id=p_org);
@@ -370,6 +386,7 @@ begin
     or exists(select 1 from public.intake_reviewers v where v.org_id=o.id and v.user_id=p_actor)
     order by o.id for update;
   delete from public.intake_reviewers where user_id=p_actor;
+  delete from public.intake_purged_commands where actor_id=p_actor;
   -- Receipts embed typed command input. Delete references to the erased person
   -- as well as their own receipts, instead of leaving their ID in opaque JSON.
   delete from public.intake_commands where actor_id=p_actor or input->>'assignee'=p_actor::text

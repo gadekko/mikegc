@@ -89,6 +89,7 @@ describe("intake RPC failures", () => {
     "P0001",
     "23505",
     "P0003",
+    "P0004",
     "22023",
     "23514",
     "22P02",
@@ -110,6 +111,8 @@ describe("intake RPC failures", () => {
       {},
     );
     expect(result.ok).toBe(false);
+    if (code === "P0004")
+      expect(result).toMatchObject({ ok: false, kind: "conflict", code: "intake_purged" });
     expect(JSON.stringify(result)).not.toContain("CONFIDENTIAL INPUT");
     expect(rpc).toHaveBeenCalledTimes(code === "40P01" ? 3 : 1);
   });

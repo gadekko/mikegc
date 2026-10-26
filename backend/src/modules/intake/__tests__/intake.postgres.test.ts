@@ -179,6 +179,37 @@ describe.skipIf(!container)("intake real PostgreSQL transactions", () => {
       );
     }
   });
+  it("rolls back publication, history and state when receipt insertion fails", () => {
+    sql(submit());
+    sql(cmd("assign", 3, 101, 1, `,${q(3)}`));
+    sql(
+      "alter table public.intake_commands add constraint test_reject_publish_receipt check(action <> 'publish');",
+    );
+    try {
+      expect(() =>
+        sql(cmd("publish", 3, 102, 2, ",'Never committed'")),
+      ).toThrow();
+      expect(
+        sql("select state||':'||version from public.intake_requests"),
+      ).toBe("in_review:2");
+      expect(sql("select count(*) from public.intake_messages")).toBe("0");
+      expect(
+        sql("select count(*) from public.intake_events where kind='publish'"),
+      ).toBe("0");
+      expect(
+        sql(
+          "select count(*) from public.intake_commands where action='publish'",
+        ),
+      ).toBe("0");
+    } finally {
+      sql(
+        "alter table public.intake_commands drop constraint test_reject_publish_receipt",
+      );
+    }
+    expect(
+      json(cmd("publish", 3, 102, 2, ",'Never committed'")).applied_version,
+    ).toBe(3);
+  });
   it("unassigns departing reviewers and pauses after the last reviewer leaves", () => {
     sql(submit());
     sql(cmd("assign", 3, 101, 1, `,${q(3)}`));
@@ -222,6 +253,9 @@ describe.skipIf(!container)("intake real PostgreSQL transactions", () => {
       expect(() =>
         sql(`set role ${role}; select * from public.intake_requests;`),
       ).toThrow();
+      expect(() =>
+        sql(`set role ${role}; select * from public.intake_purged_commands;`),
+      ).toThrow();
       expect(() => sql(`set role ${role}; ${submit()}`)).toThrow();
     }
   });
@@ -243,6 +277,7 @@ describe.skipIf(!container)("intake real PostgreSQL transactions", () => {
       "messages",
       "events",
       "commands",
+      "purged_commands",
     ])
       expect(sql(`select count(*) from public.intake_${table}`)).toBe("0");
   });
@@ -329,6 +364,68 @@ describe.skipIf(!container)("intake real PostgreSQL transactions", () => {
     expect(
       sql(`select count(*) from public.intake_settings where org_id=${q(11)}`),
     ).toBe("0");
+  });
+  it("refuses old submissions after purge but permits fresh commands without retaining content", () => {
+    sql(submit());
+    sql(cmd("assign", 3, 101, 1, `,${q(3)}`));
+    sql(`select public.intake_purge(${q(10)},${q(1)})`);
+    const tombstones = json(
+      "select json_agg(t order by command_id) from public.intake_purged_commands t",
+    );
+    expect(tombstones).toEqual([
+      { org_id: uid(10), actor_id: uid(2), command_id: uid(100) },
+      { org_id: uid(10), actor_id: uid(3), command_id: uid(101) },
+    ]);
+    expect(
+      sql(
+        "select count(*) from public.intake_commands where request_id is not null",
+      ),
+    ).toBe("0");
+    expect(sql("select count(*) from public.intake_messages")).toBe("0");
+    expect(
+      sql(
+        "select count(*) from public.intake_events where request_id is not null",
+      ),
+    ).toBe("0");
+    expect(() => sql(submit())).toThrow(/purged request data/);
+    expect(sql("select count(*) from public.intake_requests")).toBe("0");
+    sql(`select public.remove_org_member(${q(10)},${q(2)},${q(1)});`);
+    expect(() => sql(submit())).toThrow(/Intake not found/);
+    sql(
+      `insert into public.org_members(org_id,user_id) values(${q(10)},${q(2)});`,
+    );
+    expect(() => sql(submit())).toThrow(/purged request data/);
+    expect(json(submit(150)).replayed).toBe(false);
+    // Another actor's use of the same UUID does not inherit this tombstone.
+    expect(
+      json(
+        `select public.intake_submit_request(${q(10)},${q(4)},${q(100)},${q(21)},'general','Fresh','New work');`,
+      ).replayed,
+    ).toBe(false);
+  });
+  it("erases tombstones with account identity and organization lifecycle", () => {
+    sql(submit());
+    sql(cmd("assign", 3, 101, 1, `,${q(3)}`));
+    sql(cmd("ask", 3, 102, 2, ",'Question?'"));
+    sql(cmd("reply", 2, 103, 3, ",'Reply'"));
+    sql(cmd("assign", 4, 104, 4, `,${q(4)}`));
+    sql(`select public.intake_purge(${q(10)},${q(1)})`);
+    expect(sql("select count(*) from public.intake_purged_commands")).toBe("5");
+    sql(`select public.intake_erase_identity(${q(2)})`);
+    expect(
+      sql(
+        `select count(*) from public.intake_purged_commands where actor_id=${q(2)}`,
+      ),
+    ).toBe("0");
+    sql(`delete from auth.users where id=${q(3)}`);
+    expect(
+      sql(
+        `select count(*) from public.intake_purged_commands where actor_id=${q(3)}`,
+      ),
+    ).toBe("0");
+    expect(sql("select count(*) from public.intake_purged_commands")).toBe("1");
+    sql(`delete from public.organizations where id=${q(10)}`);
+    expect(sql("select count(*) from public.intake_purged_commands")).toBe("0");
   });
   it("purges request data atomically while preserving configuration", () => {
     sql(submit());

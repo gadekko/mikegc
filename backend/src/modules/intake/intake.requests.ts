@@ -21,6 +21,12 @@ export async function intakeRpc<T>(
       return failure("not_found", "Legal request not found.");
     if (error.code === "42501")
       return failure("forbidden", "You don't have permission for this action.");
+    if (error.code === "P0004")
+      return failure(
+        "conflict",
+        "This command belongs to requests that were deleted. Start a new request.",
+        "intake_purged",
+      );
     if (error.code === "P0001" || error.code === "23505")
       return failure(
         "conflict",
