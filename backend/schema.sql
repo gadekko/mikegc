@@ -10369,7 +10369,7 @@ $$;
 
 -- Account deletion may cascade memberships while an organization is deleted.
 create or replace function public.cleanup_removed_org_member_overrides()
-returns trigger language plpgsql set search_path = public as $$
+returns trigger language plpgsql security definer set search_path = pg_catalog, public, pg_temp as $$
 declare item record; successor uuid; actor uuid; item_table text; item_title text;
 declare snapshot jsonb; active boolean; former_user uuid;
 begin
@@ -10984,5 +10984,6 @@ insert into public.schema_migrations (filename) values
   ('20261021_01_chat_subagent_runs.sql'),
   ('20261021_02_user_subagent_defaults.sql'),
   ('20261021_03_user_response_details.sql'),
-  ('20261021_04_word_chat_message_playbook.sql')
+  ('20261021_04_word_chat_message_playbook.sql'),
+  ('20261026_00_org_departure_auth_role.sql')
 on conflict (filename) do nothing;
