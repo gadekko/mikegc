@@ -707,3 +707,29 @@ export interface AuditActorPage {
   users: AuditActor[];
   nextOffset: number | null;
 }
+
+/** Organization-owned, text-only legal intake. Dates are business targets. */
+export type IntakeState = "submitted" | "in_review" | "needs_information" | "resolved" | "cancelled";
+export type IntakeAction = "assignment" | "questions" | "replies" | "answer" | "cancel";
+export interface IntakeConfiguration {
+  configured: boolean; enabled: boolean; can_configure: boolean; is_reviewer: boolean;
+  revision?: number; reviewer_ids?: string[];
+}
+export interface IntakeReviewer { user_id: string; display_name: string | null; email: string | null; is_reviewer: boolean }
+export interface IntakeRequest {
+  incarnation_id: string;
+  id: string; org_id: string; requester_id: string | null; assignee_id: string | null;
+  category: "nda" | "general"; subject: string; description: string;
+  requested_by_date: string | null; timezone: string | null; state: IntakeState; version: number;
+  created_at: string; updated_at: string; requester_name: string; assignee_name: string | null;
+  capabilities: { assign: boolean; ask: boolean; reply: boolean; publish: boolean; cancel: boolean };
+}
+export interface IntakeMessage { id: string; kind: "question" | "reply" | "answer"; body: string; author_name: string; created_at: string }
+export interface IntakeEvent { id: number; kind: string; from_state: IntakeState | null; to_state: IntakeState | null; actor_name: string; created_at: string }
+export interface IntakeReceipt { request_id: string | null; applied_version: number; message_id: string | null; replayed: boolean }
+export interface IntakeSubmission {
+  id: string; command_id: string; category: "nda" | "general"; subject: string; description: string;
+  requested_by_date?: string | null; timezone?: string | null;
+}
+export interface IntakeCommand { command_id: string; expected_version: number; body?: string; assignee_id?: string | null }
+export interface IntakeConfigurationCommand { command_id: string; expected_revision: number; enabled: boolean; reviewer_ids: string[] }
