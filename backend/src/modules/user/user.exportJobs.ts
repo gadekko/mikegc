@@ -29,6 +29,7 @@ type ExportArtifact = {
     filename: string;
     /** Stored on the object and replayed as the download's Content-Type. */
     contentType: string;
+    intakeManifest?: { version: 1; requests: {id: string; incarnation_id: string}[] };
 };
 
 const JSON_EXPORT_AUDIT_ACTIONS: Record<JsonExportType, string> = {
@@ -49,7 +50,9 @@ async function buildJsonExport(
             : type === "chats"
               ? await buildUserChatsExport(db, userId, userEmail)
               : await buildUserTabularReviewsExport(db, userId, userEmail);
+    const intake = type === "account" ? (data as Awaited<ReturnType<typeof buildUserAccountExport>>).intake : null;
     return {
+        ...(intake ? { intakeManifest: { version: 1 as const, requests: intake.requests.map(x => ({id: x.request.id, incarnation_id: x.request.incarnation_id})) } } : {}),
         body: Buffer.from(JSON.stringify(data, null, 2), "utf8"),
         filename: userExportFilename(type, userId),
         contentType: "application/json",
@@ -223,6 +226,7 @@ export async function handleExportBuild(
     // client downloads through GET /user/exports/:id/download instead, which
     // re-checks ownership on every request and replays content_type.
     return {
+        ...(artifact.intakeManifest ? { intake_format: 1, intake_manifest: artifact.intakeManifest } : {}),
         storage_path: storagePath,
         filename: artifact.filename,
         content_type: artifact.contentType,

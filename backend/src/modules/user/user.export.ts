@@ -1,3 +1,4 @@
+import { validateIntakeExport } from "../intake/intake.service";
 // Data export: scheduling the durable export jobs, polling their status and
 // loading the finished artifact.
 //
@@ -192,7 +193,16 @@ export async function loadUserExportArtifact(
     const filename =
         (row.result.filename as string | undefined) ?? "export.json";
     if (!storagePath) return { ok: false, kind: "not_found" };
+    // Legacy exports have no intake payload. New artifacts must carry a valid
+    // manifest; ownership of the export job alone cannot preserve revoked access.
+    const intakeAllowed = () => row.result!.intake_format === undefined
+        ? Promise.resolve(row.result!.intake_manifest === undefined)
+        : row.result!.intake_format === 1
+          ? validateIntakeExport(db, userId, row.result!.intake_manifest)
+          : Promise.resolve(false);
+    if (!(await intakeAllowed())) return { ok: false, kind: "expired" };
     const raw = await downloadFile(storagePath);
+    if (!(await intakeAllowed())) return { ok: false, kind: "expired" };
     if (!raw) return { ok: false, kind: "expired" };
     // Artifacts are no longer all JSON (CSV, zip). The builder records the
     // type it produced; the default covers jobs finished before it did.

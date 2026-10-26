@@ -44,6 +44,12 @@ const DELETE_ROWS: {
   message: string;
 }[] = [
   {
+    kind: "intake", label: "Delete all legal requests",
+    description: "Permanently delete request text, correspondence and request history. Keep intake settings and the Legal team.",
+    title: "Delete all legal requests?",
+    message: "This permanently deletes every legal request and its conversation across the organization. This cannot be undone. Intake settings and the Legal team remain in place.",
+  },
+  {
     kind: "chats",
     label: "Delete all chats",
     description:

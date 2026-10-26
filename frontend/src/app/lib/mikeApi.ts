@@ -1769,6 +1769,7 @@ export async function deleteOrg(orgId: string): Promise<void> {
 }
 
 export type OrgDataKind =
+    | "intake"
     | "chats"
     | "tabular-reviews"
     | "projects"

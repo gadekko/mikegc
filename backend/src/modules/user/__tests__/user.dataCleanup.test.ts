@@ -147,6 +147,7 @@ function makeDb(
         async rpc(name: string, args: Record<string, unknown>) {
             // These fixtures exercise the post-offboarding data/storage cascade.
             // Departure classification and atomicity have real PostgreSQL tests.
+            if (name === "intake_erase_identity") return { data: null, error: null };
             if (name === "prepare_account_org_departures") return { data: null, error: null };
             if (name === "org_default_departure_successor") {
                 const departing = args.p_departing as string[];

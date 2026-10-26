@@ -1,3 +1,4 @@
+import { eraseIntakeIdentity } from "../intake/intake.service";
 import { captureInlineDocumentCleanup, completeInlineDocumentCleanup } from "../documents/documents.service";
 import { type Db } from "../../lib/supabase";
 import { assertStorageConfigured, deleteFile, deleteFileBestEffort, listFiles } from "../../lib/storage";
@@ -909,6 +910,7 @@ export async function deleteUserAccountData(
     // references are detached. Safe to repeat after the request already ran it.
     const departure = await db.rpc("prepare_account_org_departures", { p_user_id: userId });
     await throwIfError(departure.error, "Failed to hand over organization work");
+    await eraseIntakeIdentity(db, userId);
 
     for (const personalOrgId of await listPersonalOrgIds(db, userId)) {
         await deleteOrgContent(db, personalOrgId);

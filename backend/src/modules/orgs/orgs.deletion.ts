@@ -1,3 +1,4 @@
+import { purgeIntake } from "../intake/intake.service";
 // Owner-only destructive actions on an organization: deleting the whole
 // organization, and clearing one kind of its content from the Privacy & data
 // page. Authorization lives here; the row work is in orgs.dataCleanup.ts.
@@ -28,6 +29,7 @@ export function deleteOrg(db: Db, params: OrgActor): Promise<Done> {
 }
 
 export const ORG_DATA_KINDS = [
+    "intake",
     "chats",
     "tabular-reviews",
     "projects",
@@ -41,7 +43,8 @@ export function isOrgDataKind(value: unknown): value is OrgDataKind {
     return ORG_DATA_KINDS.includes(value as OrgDataKind);
 }
 
-const PURGE: Record<OrgDataKind, (db: Db, orgId: string) => Promise<unknown>> = {
+const PURGE: Record<OrgDataKind, (db: Db, orgId: string, userId: string) => Promise<unknown>> = {
+    intake: purgeIntake,
     chats: deleteOrgChats,
     "tabular-reviews": deleteOrgTabularReviews,
     projects: deleteOrgProjects,
@@ -64,7 +67,7 @@ export async function deleteOrgData(
     if (!isOrgOwner(role)) return { ok: false, kind: "owner_required" };
 
     try {
-        await PURGE[params.kind](db, params.orgId);
+        await PURGE[params.kind](db, params.orgId, params.userId);
     } catch (error) {
         return {
             ok: false,
