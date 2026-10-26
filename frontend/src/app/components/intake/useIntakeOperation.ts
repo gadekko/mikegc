@@ -1,33 +1,47 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  createIntakeMemory,
+  notifyIntakeMemory,
+  type IntakeViewMemory,
+} from "@/app/lib/intakeMemory";
+import { useIntakeMemorySnapshot } from "./useIntakeMemory";
 import type { IntakeReceipt } from "@mike/contracts";
 import { describeError, notifyError } from "@/app/lib/userFacingError";
 
-/** Retain one immutable command until its receipt or a definitive rejection. */
+/** A receipt belongs to its retained view, never the route currently on screen. */
 export function useIntakeOperation(
   onSaved: (receipt: IntakeReceipt) => void,
   onRejected?: (error: unknown) => void,
+  retained?: IntakeViewMemory,
 ) {
-  const alive = useRef(true);
-  const running = useRef(false);
-  const pending = useRef<(() => Promise<IntakeReceipt>) | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [uncertain, setUncertain] = useState(false);
+  const [local] = useState(createIntakeMemory);
+  const view = retained ?? local;
+  const snapshot = useIntakeMemorySnapshot(view);
   useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
+    if (!view.valid || !snapshot.outcome || view.outcome !== snapshot.outcome)
+      return;
+    const outcome = snapshot.outcome;
+    view.outcome = null;
+    notifyIntakeMemory(view);
+    if ("receipt" in outcome) onSaved(outcome.receipt);
+    else {
+      onRejected?.(outcome.error);
+      notifyError(outcome.error, {
+        action: view.uncertain
+          ? "confirm whether the legal request was saved"
+          : "save the legal request",
+      });
+    }
+  }, [view, snapshot.outcome, onSaved, onRejected]);
   async function execute(operation?: () => Promise<IntakeReceipt>) {
-    if (running.current || (pending.current && operation)) return;
-    if (operation) pending.current = operation;
-    const command = pending.current;
+    if (!view.valid || view.busy || view.outcome || (view.pending && operation))
+      return;
+    if (operation) view.pending = operation;
+    const command = view.pending;
     if (!command) return;
-    running.current = true;
-    setBusy(true);
-    let saved: IntakeReceipt | undefined;
-    let unknown = uncertain;
+    view.busy = true;
+    notifyIntakeMemory(view);
     try {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
@@ -36,49 +50,57 @@ export function useIntakeOperation(
             !receipt ||
             !Number.isInteger(receipt.applied_version) ||
             typeof receipt.replayed !== "boolean"
-          ) {
+          )
             throw new Error("Invalid intake acknowledgement");
-          }
-          if (!alive.current) return;
-          pending.current = null;
-          setUncertain(false);
-          saved = receipt;
-          break;
+          if (!view.valid) return;
+          view.pending = null;
+          view.uncertain = false;
+          view.outcome = { receipt };
+          return;
         } catch (error) {
-          if (!alive.current) return;
+          if (!view.valid) return;
           const status =
             error && typeof error === "object" && "status" in error
               ? Number(error.status)
               : 0;
-          // Refresh access after any denial. A lost receipt followed by lost
-          // access remains uncertain: retain that command without exposing data.
+          const code =
+            error && typeof error === "object" && "code" in error
+              ? error.code
+              : null;
           if (status >= 400 && status < 500) {
-            if (
-              !(unknown && (status === 401 || status === 403 || status === 404))
-            ) {
-              pending.current = null;
-              setUncertain(false);
+            // Only these SQL rejections follow the immutable receipt lookup.
+            // A gateway 429/400/409 says nothing about an earlier lost response.
+            const definitive =
+              !view.uncertain ||
+              (status === 409 &&
+                ["intake_conflict", "intake_paused", "intake_purged"].includes(
+                  String(code),
+                ));
+            if (definitive) {
+              view.pending = null;
+              view.uncertain = false;
             }
-            onRejected?.(error);
-            notifyError(error, { action: "save the legal request" });
+            view.outcome = { error };
             return;
           }
-          unknown = true;
-          setUncertain(true);
-          if (attempt === 1)
-            notifyError(error, {
-              action: "confirm whether the legal request was saved",
-            });
+          view.uncertain = true;
+          if (attempt === 1 || view.listeners.size === 0) {
+            view.outcome = { error };
+            return;
+          }
         }
       }
     } finally {
-      running.current = false;
-      if (alive.current) setBusy(false);
+      view.busy = false;
+      if (view.valid) notifyIntakeMemory(view);
     }
-    // A rendering/navigation failure cannot make an acknowledged write uncertain.
-    if (saved) onSaved(saved);
   }
-  return { busy, uncertain, execute, locked: busy || uncertain };
+  return {
+    busy: snapshot.busy,
+    uncertain: snapshot.uncertain,
+    execute,
+    locked: snapshot.busy || snapshot.uncertain || !!snapshot.outcome,
+  };
 }
 
 export function useIntakeDraftWarning(dirty: boolean) {
@@ -91,7 +113,9 @@ export function useIntakeDraftWarning(dirty: boolean) {
       event.returnValue = "";
     };
     const navigation = (event: Event) => {
-      if (!window.confirm("Leave this draft? Unsaved text will be lost."))
+      if (
+        !window.confirm("Leave this page? Your draft will remain in this tab.")
+      )
         event.preventDefault();
     };
     const click = (event: MouseEvent) => {
@@ -116,7 +140,9 @@ export function useIntakeDraftWarning(dirty: boolean) {
         link.getAttribute("href")?.startsWith("#")
       )
         return;
-      if (!window.confirm("Leave this draft? Unsaved text will be lost.")) {
+      if (
+        !window.confirm("Leave this page? Your draft will remain in this tab.")
+      ) {
         event.preventDefault();
         event.stopPropagation();
       }

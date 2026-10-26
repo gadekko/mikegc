@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useIntakeMemory, useIntakeDraft } from "./useIntakeMemory";
 import type {
   IntakeAction,
   IntakeEvent,
@@ -64,12 +65,13 @@ export function Detail({
   orgId: string;
   requestId: string;
 }) {
+  const memory = useIntakeMemory(orgId, requestId);
   const [request, setRequest] = useState<IntakeRequest | null>(null);
   const [messages, setMessages] = useState<IntakeMessage[]>([]);
   const [events, setEvents] = useState<IntakeEvent[]>([]);
   const [reviewers, setReviewers] = useState<IntakeReviewer[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useIntakeDraft(memory, "body", "");
   const [preview, setPreview] = useState<{
     body: string;
     version: number;
@@ -77,7 +79,11 @@ export function Detail({
   const [cancel, setCancel] = useState(false);
   const [assignee, setAssignee] = useState("");
   const epoch = useRef(0);
-  const pendingMessage = useRef(false);
+  const [pendingMessage, setPendingMessage] = useIntakeDraft(
+    memory,
+    "pendingMessage",
+    false,
+  );
   const refresh = useCallback(async () => {
     const generation = ++epoch.current;
     try {
@@ -124,7 +130,7 @@ export function Detail({
   }, [refresh]);
   const operation = useIntakeOperation(
     () => {
-      if (pendingMessage.current) setDraft("");
+      if (pendingMessage) setDraft("");
       setPreview(null);
       setCancel(false);
       void refresh();
@@ -138,8 +144,9 @@ export function Detail({
       setCancel(false);
       void refresh();
     },
+    memory,
   );
-  useIntakeDraftWarning(!!draft || operation.uncertain);
+  useIntakeDraftWarning(!!draft || operation.locked);
   function command(
     action: IntakeAction,
     body?: string,
@@ -152,7 +159,7 @@ export function Detail({
       ...(body !== undefined ? { body } : {}),
       ...(action === "assignment" ? { assignee_id: assignee || null } : {}),
     };
-    pendingMessage.current = body !== undefined;
+    setPendingMessage(body !== undefined);
     void operation.execute(async () => {
       const receipt = await commandIntakeRequest(
         orgId,
@@ -262,7 +269,8 @@ export function Detail({
                 />
                 <p className="text-sm text-muted-foreground">
                   Messages are shared with the requester and Legal. Unsaved text
-                  is lost if you leave or switch workspace.
+                  stays in this tab when you navigate, but is lost if you
+                  reload, close the tab or sign out.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {request.capabilities.ask && (

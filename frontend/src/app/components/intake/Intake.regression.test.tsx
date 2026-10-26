@@ -11,6 +11,7 @@ import type { IntakeConfiguration, IntakeRequest } from "@mike/contracts";
 import { IntakeInbox, Inbox } from "./IntakeInbox";
 import { IntakeDetail, Detail } from "./IntakeDetail";
 import { Settings } from "./IntakeSettings";
+import { setIntakeMemoryAccount } from "@/app/lib/intakeMemory";
 
 const mocks = vi.hoisted(() => ({
   configuration: vi.fn(),
@@ -129,6 +130,7 @@ const receipt = {
 };
 
 beforeEach(() => {
+  setIntakeMemoryAccount(null);
   vi.resetAllMocks();
   mocks.workspace = {
     accountId: "account-a",
@@ -560,4 +562,162 @@ it("filters the Legal queue by current reviewer", async () => {
       }),
     ),
   );
+});
+
+describe("history navigation recovery", () => {
+  it("restores every new-request field and clears only an explicitly discarded draft", async () => {
+    const first = render(<Inbox orgId="org-a" />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "New request" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New request" }));
+    fireEvent.change(screen.getByLabelText("Subject"), {
+      target: { value: "Final keystroke!" },
+    });
+    fireEvent.change(screen.getByLabelText("What do you need help with?"), {
+      target: { value: "Private request" },
+    });
+    fireEvent.change(screen.getByLabelText("Request type"), {
+      target: { value: "nda" },
+    });
+    fireEvent.change(screen.getByLabelText(/Business target date/), {
+      target: { value: "2026-11-10" },
+    });
+    fireEvent.change(screen.getByLabelText("Confirm timezone"), {
+      target: { value: "Europe/Stockholm" },
+    });
+    first.unmount();
+    render(<Inbox orgId="org-a" />);
+    expect(screen.getByLabelText("Subject")).toHaveValue("Final keystroke!");
+    expect(screen.getByLabelText("What do you need help with?")).toHaveValue(
+      "Private request",
+    );
+    expect(screen.getByLabelText("Request type")).toHaveValue("nda");
+    expect(screen.getByLabelText(/Business target date/)).toHaveValue(
+      "2026-11-10",
+    );
+    expect(screen.getByLabelText("Confirm timezone")).toHaveValue(
+      "Europe/Stockholm",
+    );
+    vi.mocked(window.confirm).mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: /^Close$/ }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "New request" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New request" }));
+    expect(screen.getByLabelText("Subject")).toHaveValue("");
+  });
+
+  it("keeps configuration selections at their original revision after remount", async () => {
+    mocks.configuration.mockResolvedValue(configuration(1));
+    const first = render(<Settings orgId="org-a" />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
+    first.unmount();
+    mocks.configuration.mockResolvedValue(configuration(2));
+    render(<Settings orgId="org-a" />);
+    expect(
+      await screen.findByRole("checkbox", { name: /Lawyer B/ }),
+    ).toBeChecked();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save intake settings" }),
+    );
+    await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(1));
+    expect(mocks.configure.mock.calls[0][1]).toMatchObject({
+      expected_revision: 1,
+      reviewer_ids: ["lawyer-a", "lawyer-b"],
+    });
+  });
+
+  it("restores a conversation draft after rechecking access but requires a fresh preview", async () => {
+    const first = render(<Detail orgId="org-a" requestId="request-a" />);
+    fireEvent.change(await screen.findByLabelText("Message to the requester"), {
+      target: { value: "Retained answer!" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview answer" }));
+    first.unmount();
+    mocks.request.mockResolvedValue(request({ version: 7 }));
+    render(<Detail orgId="org-a" requestId="request-a" />);
+    expect(
+      screen.queryByLabelText("Message to the requester"),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByLabelText("Message to the requester"),
+    ).toHaveValue("Retained answer!");
+    expect(
+      screen.queryByRole("button", { name: "Share answer and resolve" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Preview answer" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Share answer and resolve" }),
+    );
+    await waitFor(() => expect(mocks.command).toHaveBeenCalledTimes(1));
+    expect(mocks.command.mock.calls[0][3]).toMatchObject({
+      body: "Retained answer!",
+      expected_version: 7,
+    });
+  });
+
+  it("hides a retained answer after access is revoked while away", async () => {
+    const first = render(<Detail orgId="org-a" requestId="request-a" />);
+    fireEvent.change(await screen.findByLabelText("Message to the requester"), {
+      target: { value: "Private retained answer" },
+    });
+    first.unmount();
+    mocks.request.mockRejectedValue({ status: 403 });
+    render(<Detail orgId="org-a" requestId="request-a" />);
+    await screen.findByRole("alert");
+    expect(
+      screen.queryByDisplayValue("Private retained answer"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Request description")).not.toBeInTheDocument();
+  });
+
+  it("keeps drafts separate between organizations and clears them on account change", async () => {
+    const first = render(<Detail orgId="org-a" requestId="request-a" />);
+    fireEvent.change(await screen.findByLabelText("Message to the requester"), {
+      target: { value: "Account A org A" },
+    });
+    first.unmount();
+    const second = render(<Detail orgId="org-b" requestId="request-a" />);
+    expect(
+      await screen.findByLabelText("Message to the requester"),
+    ).toHaveValue("");
+    second.unmount();
+    const third = render(<Detail orgId="org-a" requestId="request-a" />);
+    expect(
+      await screen.findByLabelText("Message to the requester"),
+    ).toHaveValue("Account A org A");
+    third.unmount();
+    setIntakeMemoryAccount("account-b");
+    mocks.workspace.accountId = "account-b";
+    render(<Detail orgId="org-a" requestId="request-a" />);
+    expect(
+      await screen.findByLabelText("Message to the requester"),
+    ).toHaveValue("");
+  });
+});
+
+it("keeps the acknowledged settings revision if editing resumes during refresh", async () => {
+  const refresh = deferred<IntakeConfiguration>();
+  mocks.configuration
+    .mockResolvedValueOnce(configuration(1))
+    .mockReturnValueOnce(refresh.promise)
+    .mockResolvedValue(configuration(2));
+  mocks.configure.mockResolvedValue({
+    ...receipt,
+    request_id: null,
+    applied_version: 2,
+  });
+  render(<Settings orgId="org-a" />);
+  fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Save intake settings" }));
+  await waitFor(() => expect(mocks.configuration).toHaveBeenCalledTimes(2));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Enable intake" }));
+  await act(async () => refresh.resolve(configuration(2)));
+  fireEvent.click(screen.getByRole("button", { name: "Save intake settings" }));
+  await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(2));
+  expect(mocks.configure.mock.calls[1][1]).toMatchObject({
+    expected_revision: 2,
+    enabled: false,
+  });
 });

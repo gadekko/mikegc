@@ -21,6 +21,7 @@ import {
 import { AUTH_SESSION_INVALIDATED_EVENT } from "@/app/lib/authEvents";
 import { setReportingUser } from "@/app/lib/errorReporting";
 import { isOnAuthRoute, notifyError } from "@/app/lib/userFacingError";
+import { setIntakeMemoryAccount } from "@/app/lib/intakeMemory";
 import { clearToasts } from "@/shared/ui/ToastUI";
 
 type User = AuthUser;
@@ -63,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Notifications can hold write closures from the previous account.
         // Every session-ending or identity-changing path must discard them.
         if (!nextUser || sessionUserIdRef.current !== nextUser.id) clearToasts();
+        setIntakeMemoryAccount(nextUser?.id ?? null);
         sessionUserIdRef.current = nextUser?.id ?? null;
         setUser(nextUser);
     }, []);

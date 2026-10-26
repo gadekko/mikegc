@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useIntakeMemory, useIntakeDraft } from "./useIntakeMemory";
 import type {
   IntakeConfiguration,
   IntakeReviewer,
@@ -24,24 +25,40 @@ import {
 export function IntakeSettings() {
   const { orgId, org } = useOrganizationSettings();
   const { accountId } = useWorkspace();
-  if (org?.role !== "owner")
+  if (!accountId || org?.role !== "owner")
     return <p>Only organization owners can configure intake.</p>;
   return <Settings key={`${accountId}:${orgId}`} orgId={orgId} />;
 }
 export function Settings({ orgId }: { orgId: string }) {
+  const memory = useIntakeMemory(orgId, "settings");
+  const [baseRevision, setBaseRevision] = useIntakeDraft<number | null>(
+    memory,
+    "revision",
+    null,
+  );
   const [config, setConfig] = useState<IntakeConfiguration | null>(null);
   const [people, setPeople] = useState<IntakeReviewer[]>([]);
-  const [enabled, setEnabled] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [enabled, setEnabled] = useIntakeDraft(memory, "enabled", false);
+  const [selected, setSelected] = useIntakeDraft<string[]>(
+    memory,
+    "selected",
+    [],
+  );
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  const [dirty, setDirty] = useState(false);
-  const [mfa, setMfa] = useState(false);
-  const submitted = useRef<IntakeConfigurationCommand | null>(null);
-  const [conflict, setConflict] = useState(false);
+  const [dirty, setDirty] = useIntakeDraft(memory, "dirty", false);
+  const [mfa, setMfa] = useIntakeDraft(memory, "mfa", false);
+  const [submitted, setSubmitted] =
+    useIntakeDraft<IntakeConfigurationCommand | null>(
+      memory,
+      "submitted",
+      null,
+    );
+  const [conflict, setConflict] = useIntakeDraft(memory, "conflict", false);
   const operation = useIntakeOperation(
-    () => {
+    (receipt) => {
       setDirty(false);
+      setBaseRevision(receipt.applied_version);
       setConflict(false);
       setReload((x) => x + 1);
       window.dispatchEvent(new Event("mike:intake-configured"));
@@ -61,8 +78,9 @@ export function Settings({ orgId }: { orgId: string }) {
         setConflict(true);
       }
     },
+    memory,
   );
-  const confirmDiscard = useIntakeDraftWarning(dirty || operation.uncertain);
+  const confirmDiscard = useIntakeDraftWarning(dirty || operation.locked);
   // Keep the original revision with the draft. Never silently rebase old
   // reviewer selections onto configuration another owner has changed.
   useEffect(() => {
@@ -73,8 +91,11 @@ export function Settings({ orgId }: { orgId: string }) {
         setConfig(c);
         setPeople(p);
         setError(null);
-        setEnabled(c.enabled);
-        setSelected(c.reviewer_ids ?? []);
+        if (!memory.values.get("dirty") && !memory.pending) {
+          setEnabled(c.enabled);
+          setSelected(c.reviewer_ids ?? []);
+          setBaseRevision(c.revision ?? null);
+        }
       })
       .catch((e) => {
         if (active) {
@@ -86,9 +107,9 @@ export function Settings({ orgId }: { orgId: string }) {
     return () => {
       active = false;
     };
-  }, [orgId, reload]);
+  }, [orgId, reload, memory, setEnabled, setSelected, setBaseRevision]);
   function save(body: IntakeConfigurationCommand) {
-    submitted.current = body;
+    setSubmitted(body);
     void operation.execute(async () => {
       const receipt = await configureIntake(orgId, body);
       if (receipt.request_id !== null)
@@ -127,7 +148,7 @@ export function Settings({ orgId }: { orgId: string }) {
         e.preventDefault();
         const body = {
           command_id: crypto.randomUUID(),
-          expected_revision: config.revision!,
+          expected_revision: baseRevision!,
           enabled,
           reviewer_ids: [...selected],
         };
@@ -153,8 +174,9 @@ export function Settings({ orgId }: { orgId: string }) {
           checked={enabled}
           disabled={operation.locked || mfa || conflict}
           onChange={(e) => {
+            const checked = e.target.checked;
             setDirty(true);
-            setEnabled(e.target.checked);
+            setEnabled(checked);
           }}
         />
         Enable intake
@@ -174,9 +196,10 @@ export function Settings({ orgId }: { orgId: string }) {
               type="checkbox"
               checked={selected.includes(p.user_id)}
               onChange={(e) => {
+                const checked = e.target.checked;
                 setDirty(true);
                 setSelected((s) =>
-                  e.target.checked
+                  checked
                     ? [...s, p.user_id]
                     : s.filter((id) => id !== p.user_id),
                 );
@@ -205,6 +228,7 @@ export function Settings({ orgId }: { orgId: string }) {
           <PillButtonUI
             tone="black"
             type="button"
+            disabled={operation.locked}
             onClick={() => {
               if (confirmDiscard()) {
                 setDirty(false);
@@ -223,7 +247,7 @@ export function Settings({ orgId }: { orgId: string }) {
         onVerified={() => {
           setMfa(false);
           if (operation.uncertain) void operation.execute();
-          else if (submitted.current) save(submitted.current);
+          else if (submitted) save(submitted);
         }}
       />
       {operation.uncertain && (

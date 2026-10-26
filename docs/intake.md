@@ -49,6 +49,9 @@ notes, email delivery, scheduled processing or automatic legal decisions.
   unavailable while the organization is deleted, return on restoration, and
   cascade on permanent purge. An owner can also delete all request data in
   **Privacy & Data**. This preserves intake settings and the Legal roster.
+  Only organization, actor and retired command IDs remain to stop an old retry
+  from recreating deleted content. These identifiers contain no request text
+  and are removed when the account identity or organization is deleted.
 
 An account export includes only the caller's currently readable own requests,
 with complete shared messages and history. Queue membership alone does not
@@ -72,11 +75,15 @@ Conflicts refresh the current request while retaining unsent text. An uncertain
 network result locks editing and offers **Check again** for the same command.
 A later access denial hides privileged content immediately.
 
-Draft text stays in the current browser view, not on the server. Link navigation,
-workspace changes, closing the form and page unload warn before discarding it.
-Browser Back/Forward navigation is not intercepted, and drafts are not restored
-after leaving the view. Do not treat unsent text as a saved request or answer.
-Configuration drafts keep
+Drafts and unconfirmed commands stay in tab memory, scoped to the signed-in
+account, organization and request. Back/Forward, internal navigation and
+workspace changes preserve them. Returning rechecks access and current server
+state; a publication preview must be rebuilt. An in-flight result is handled by
+its original view when you return, rather than navigating an unrelated page.
+Signing out or changing accounts clears drafts and pending operations. Closing
+the form explicitly discards its draft; reloading or closing the tab loses it.
+No legal text or commands are written to browser storage or history state.
+Do not treat unsent text as a saved request or answer. Configuration drafts keep
 the revision originally loaded; a conflict requires explicit reload rather than
 silently overwriting another owner's roster changes.
 
@@ -117,6 +124,8 @@ application does not know about intake. Do not drop the tables as rollback.
   concurrent commands, revocation, lifecycle and export invalidation. Schema-drift
   CI explicitly runs these tests and the existing organization lifecycle suites.
 - `npm run test:e2e -- e2e/intake.spec.ts --project=chromium` against the documented
-  local stack. The browser journey drops an answer response after the real commit
-  and checks that retrying publishes exactly once. It also checks requester/Legal
+  local stack. The browser journey restores drafts across Back/Forward, drops a
+  submission response after commit, then injects a rate limit and checks the
+  exact retry creates only one request. It also drops an answer response after
+  the real commit and checks that retrying publishes exactly once. It also checks requester/Legal
   interaction, owner content denial, narrow layout and critical accessibility.

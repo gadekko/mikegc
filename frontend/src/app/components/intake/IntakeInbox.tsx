@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { discardIntakeDraft } from "@/app/lib/intakeMemory";
+import { useIntakeMemory, useIntakeDraft } from "./useIntakeMemory";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
@@ -53,6 +55,7 @@ export function IntakeInbox() {
 }
 export function Inbox({ orgId }: { orgId: string }) {
   const router = useRouter();
+  const memory = useIntakeMemory(orgId, "new-request");
   const [config, setConfig] = useState<IntakeConfiguration | null>(null);
   const [reviewers, setReviewers] = useState<IntakeReviewer[]>([]);
   const [assignee, setAssignee] = useState("");
@@ -64,7 +67,7 @@ export function Inbox({ orgId }: { orgId: string }) {
   const [search, setSearch] = useState("");
   const [state, setState] = useState("");
   const [reload, setReload] = useState(0);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useIntakeDraft(memory, "creating", false);
   useEffect(() => {
     let active = true;
     getIntakeConfiguration(orgId)
@@ -308,18 +311,36 @@ function RequestForm({
   onSaved: (id: string) => void;
   onClose: () => void;
 }) {
-  const [subject, setSubject] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<"nda" | "general">("general");
-  const [date, setDate] = useState("");
-  const [timezone, setTimezone] = useState(
+  const memory = useIntakeMemory(orgId, "new-request");
+  const [subject, setSubject] = useIntakeDraft(memory, "subject", "");
+  const [description, setDescription] = useIntakeDraft(
+    memory,
+    "description",
+    "",
+  );
+  const [category, setCategory] = useIntakeDraft<"nda" | "general">(
+    memory,
+    "category",
+    "general",
+  );
+  const [date, setDate] = useIntakeDraft(memory, "date", "");
+  const [timezone, setTimezone] = useIntakeDraft(
+    memory,
+    "timezone",
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
-  const operation = useIntakeOperation((receipt) => {
-    if (receipt.request_id) onSaved(receipt.request_id);
-  });
+  const operation = useIntakeOperation(
+    (receipt) => {
+      if (receipt.request_id) {
+        discardIntakeDraft(memory);
+        onSaved(receipt.request_id);
+      }
+    },
+    undefined,
+    memory,
+  );
   const confirmDiscard = useIntakeDraftWarning(
-    !!subject || !!description || !!date || operation.uncertain,
+    !!subject || !!description || !!date || operation.locked,
   );
   return (
     <form
@@ -398,8 +419,8 @@ function RequestForm({
         </>
       )}
       <p className="text-sm text-muted-foreground">
-        The Legal team can read your request. Unsaved text is lost if you leave
-        this page or switch workspace.
+        The Legal team can read your request. Your draft stays in this tab
+        during navigation. Closing or reloading the tab can lose unsaved text.
       </p>
       {operation.uncertain && (
         <p role="status">
@@ -427,7 +448,7 @@ function RequestForm({
           type="button"
           disabled={operation.locked}
           onClick={() => {
-            if (confirmDiscard()) onClose();
+            if (confirmDiscard() && discardIntakeDraft(memory)) onClose();
           }}
         >
           Close

@@ -4,8 +4,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { readApiEnv } from "./users";
 import { completeOnboardingIfRequired } from "./onboarding";
 
-// Real browser, gateway, auth and SQL. The only intercepted response is dropped
-// AFTER the real server commits, to verify retrying cannot duplicate an answer.
+// Real browser, gateway, auth and SQL. Faults drop committed responses and
+// rate-limit a replay to prove history navigation cannot duplicate a write.
 test("owner configures intake, Legal clarifies and shares an exact answer once", async ({
   browser,
   baseURL,
@@ -91,7 +91,8 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
           { id: p.id, org },
         );
     const [owner, requester, lawyer] = people.map((p) => p.page);
-    await owner.goto(`/organizations/${org}/settings/intake`);
+    await owner.goto("/intake");
+    await owner.getByRole("link", { name: "Intake settings" }).click();
     await owner.getByRole("checkbox", { name: "Enable intake" }).check();
     await owner
       .getByRole("checkbox", {
@@ -100,12 +101,26 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
         ),
       })
       .check();
+    await owner.goBack();
+    await expect(owner).toHaveURL(/\/intake$/);
+    await owner.goForward();
+    await expect(
+      owner.getByRole("checkbox", { name: "Enable intake" }),
+    ).toBeChecked();
     await owner.getByRole("button", { name: "Save intake settings" }).click();
     await expect(
       owner.getByRole("button", { name: "Save intake settings" }),
     ).toBeEnabled();
-    await requester.goto("/intake");
-    await requester.getByRole("button", { name: "New request" }).click();
+    await requester.goto("/assistant");
+    await requester
+      .getByRole("button", { name: "Legal requests", exact: true })
+      .click();
+    await expect(
+      requester.getByRole("button", { name: "New request" }),
+    ).toBeEnabled();
+    await requester.getByRole("button", { name: "New request" }).focus();
+    await requester.keyboard.press("Enter");
+    await expect(requester.getByLabel("Request type")).toBeVisible();
     await requester.getByLabel("Request type").selectOption("nda");
     await requester
       .getByLabel("Subject", { exact: true })
@@ -113,9 +128,58 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
     await requester
       .getByLabel("What do you need help with?")
       .fill("Please check the supplier's confidentiality terms.");
+    await requester.getByLabel(/Business target date/).fill("2026-11-10");
+    await requester.getByLabel("Confirm timezone").fill("Europe/Stockholm");
+    await requester.goBack();
+    await expect(requester).toHaveURL(/\/assistant/);
+    await requester.goForward();
+    await expect(requester.getByLabel("Subject", { exact: true })).toHaveValue(
+      "Synthetic supplier NDA",
+    );
+    await expect(requester.getByLabel("Request type")).toHaveValue("nda");
+    await expect(requester.getByLabel(/Business target date/)).toHaveValue(
+      "2026-11-10",
+    );
+    await expect(requester.getByLabel("Confirm timezone")).toHaveValue(
+      "Europe/Stockholm",
+    );
+    const submissions: unknown[] = [];
+    await requester.route("**/api/intake/*/requests", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      submissions.push(route.request().postDataJSON());
+      if (submissions.length === 2)
+        return route.fulfill({
+          status: 429,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Try again later." }),
+        });
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      if (submissions.length === 1) await route.abort("failed");
+      else await route.fulfill({ response });
+    });
     await requester.getByRole("button", { name: "Submit request" }).click();
+    await expect(
+      requester.getByRole("button", { name: "Check again" }),
+    ).toBeEnabled();
+    await requester.goBack();
+    await requester.goForward();
+    await expect(
+      requester.getByLabel("Subject", { exact: true }),
+    ).toBeDisabled();
+    await requester.getByRole("button", { name: "Check again" }).click();
+    expect(submissions).toHaveLength(3);
+    expect(submissions[1]).toEqual(submissions[0]);
+    expect(submissions[2]).toEqual(submissions[0]);
+
     await expect(requester).toHaveURL(/\/intake\/[0-9a-f-]+\?org=/);
     const detailURL = requester.url();
+    const storedRequests = await admin(
+      `/rest/v1/intake_requests?org_id=eq.${org}&select=id`,
+      "GET",
+    );
+    expect(storedRequests).toHaveLength(1);
+
     await expect(
       requester.getByText(
         "Please check the supplier's confidentiality terms.",
@@ -137,6 +201,11 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
     await lawyer
       .getByLabel("Message to the requester")
       .fill("What is the supplier's name?");
+    await lawyer.goBack();
+    await lawyer.goForward();
+    await expect(lawyer.getByLabel("Message to the requester")).toHaveValue(
+      "What is the supplier's name?",
+    );
     await lawyer.getByRole("button", { name: "Ask for information" }).click();
     await expect(
       lawyer.getByText("What is the supplier's name?", { exact: true }),
@@ -151,7 +220,8 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
     ).toBeVisible();
     await lawyer.reload();
     const answer =
-      "Reviewed answer.\nPlease use the agreed confidentiality period.";
+      "Reviewed answer.\nPlease use the agreed confidentiality period.\n" +
+      "LongReference".repeat(30);
     await lawyer.getByLabel("Message to the requester").fill("Old draft");
     await lawyer.getByRole("button", { name: "Preview answer" }).click();
     await lawyer.getByLabel("Message to the requester").fill(answer);
@@ -191,13 +261,40 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
       requester.getByRole("button", { name: "Cancel request" }),
     ).toHaveCount(0);
     await requester.setViewportSize({ width: 375, height: 812 });
-    expect(
-      await requester.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    ).toBe(true);
-    const scan = await new AxeBuilder({ page: requester }).analyze();
-    expect(scan.violations.filter((v) => v.impact === "critical")).toEqual([]);
+    for (const dark of [false, true]) {
+      // Exercise the same root class and color-scheme used by applyDarkMode.
+      await requester.evaluate((enabled) => {
+        document.documentElement.classList.toggle("dark", enabled);
+        document.documentElement.style.colorScheme = enabled ? "dark" : "light";
+      }, dark);
+      expect(
+        await requester.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
+      const scan = await new AxeBuilder({ page: requester }).analyze();
+      expect(scan.violations.filter((v) => v.impact === "critical")).toEqual(
+        [],
+      );
+      await requester.screenshot({
+        path: test.info().outputPath(`intake-${dark ? "dark" : "light"}.png`),
+        fullPage: true,
+      });
+      const answerText = requester
+        .locator("article")
+        .getByText(answer, { exact: true });
+      await answerText.scrollIntoViewIfNeeded();
+      expect(
+        await answerText.evaluate(
+          (node) => node.scrollWidth <= node.clientWidth,
+        ),
+      ).toBe(true);
+      await requester.screenshot({
+        path: test
+          .info()
+          .outputPath(`intake-answer-${dark ? "dark" : "light"}.png`),
+      });
+    }
     await owner.goto(detailURL);
     await expect(owner.getByRole("alert")).toBeVisible();
     await expect(
