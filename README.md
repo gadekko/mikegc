@@ -9,6 +9,11 @@ for in-house legal teams.
 > [!NOTE]
 > MikeGC is a work in progress. Features and setup may change without notice.
 
+## Sponsorship
+
+Disclosure: MikeGC is sponsored by
+[GENERAL LEGAL, LLP](https://general.legal).
+
 ## In-house features
 
 Included now:
