@@ -29,7 +29,7 @@ type ExportArtifact = {
     filename: string;
     /** Stored on the object and replayed as the download's Content-Type. */
     contentType: string;
-    intakeManifest?: { version: 1; requests: {id: string; incarnation_id: string}[] };
+    intakeManifest?: { version: 1; requests: {id: string; incarnation_id: string; export_revision: number}[] };
 };
 
 const JSON_EXPORT_AUDIT_ACTIONS: Record<JsonExportType, string> = {
@@ -38,6 +38,7 @@ const JSON_EXPORT_AUDIT_ACTIONS: Record<JsonExportType, string> = {
     "tabular-reviews": "export.tabular",
 };
 
+/** Serialize the export and its intake manifest from the same checked snapshot. */
 async function buildJsonExport(
     db: Db,
     userId: string,
@@ -52,7 +53,7 @@ async function buildJsonExport(
               : await buildUserTabularReviewsExport(db, userId, userEmail);
     const intake = type === "account" ? (data as Awaited<ReturnType<typeof buildUserAccountExport>>).intake : null;
     return {
-        ...(intake ? { intakeManifest: { version: 1 as const, requests: intake.requests.map(x => ({id: x.request.id, incarnation_id: x.request.incarnation_id})) } } : {}),
+        ...(intake ? { intakeManifest: { version: 1 as const, requests: intake.requests.map(x => ({id: x.request.id, incarnation_id: x.request.incarnation_id, export_revision: x.request.export_revision})) } } : {}),
         body: Buffer.from(JSON.stringify(data, null, 2), "utf8"),
         filename: userExportFilename(type, userId),
         contentType: "application/json",
@@ -169,6 +170,7 @@ async function buildMemoryZipExport(
     };
 }
 
+/** Build and store a retryable export, retaining the exact intake snapshot manifest. */
 export async function handleExportBuild(
     db: Db,
     job: DbJob,

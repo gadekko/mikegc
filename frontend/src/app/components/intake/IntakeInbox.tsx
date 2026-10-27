@@ -40,6 +40,7 @@ import {
   useIntakeOperation,
 } from "./useIntakeOperation";
 
+/** Mount the inbox only for the signed-in account and its active organization. */
 export function IntakeInbox() {
   const { accountId, activeOrganization } = useWorkspace();
   if (!accountId || !activeOrganization)
@@ -53,6 +54,7 @@ export function IntakeInbox() {
     />
   );
 }
+/** Load personal requests or the Legal queue with organization-scoped filters. */
 export function Inbox({ orgId }: { orgId: string }) {
   const router = useRouter();
   const memory = useIntakeMemory(orgId, "new-request");
@@ -72,7 +74,11 @@ export function Inbox({ orgId }: { orgId: string }) {
     let active = true;
     getIntakeConfiguration(orgId)
       .then(async (c) => {
-        const roster = c.is_reviewer ? await getIntakeReviewers(orgId) : [];
+        const roster = c.is_reviewer
+          ? (await getIntakeReviewers(orgId)).filter(
+              (reviewer) => reviewer.is_reviewer,
+            )
+          : [];
         if (active) {
           setReviewers(roster);
           setConfig(c);
@@ -300,6 +306,7 @@ export function Inbox({ orgId }: { orgId: string }) {
     </div>
   );
 }
+/** Retain the text draft and replay the same submission until its outcome is known. */
 function RequestForm({
   orgId,
   enabled,

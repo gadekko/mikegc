@@ -168,11 +168,11 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
       requester.getByLabel("Subject", { exact: true }),
     ).toBeDisabled();
     await requester.getByRole("button", { name: "Check again" }).click();
+    await expect(requester).toHaveURL(/\/intake\/[0-9a-f-]+\?org=/);
     expect(submissions).toHaveLength(3);
     expect(submissions[1]).toEqual(submissions[0]);
     expect(submissions[2]).toEqual(submissions[0]);
 
-    await expect(requester).toHaveURL(/\/intake\/[0-9a-f-]+\?org=/);
     const detailURL = requester.url();
     const storedRequests = await admin(
       `/rest/v1/intake_requests?org_id=eq.${org}&select=id`,

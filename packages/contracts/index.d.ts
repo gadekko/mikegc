@@ -718,6 +718,8 @@ export interface IntakeConfiguration {
 export interface IntakeReviewer { user_id: string; display_name: string | null; email: string | null; is_reviewer: boolean }
 export interface IntakeRequest {
   incarnation_id: string;
+  /** Advances when contributor erasure invalidates serialized identity. */
+  export_revision: number;
   id: string; org_id: string; requester_id: string | null; assignee_id: string | null;
   category: "nda" | "general"; subject: string; description: string;
   requested_by_date: string | null; timezone: string | null; state: IntakeState; version: number;

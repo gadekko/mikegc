@@ -195,6 +195,7 @@ export async function loadUserExportArtifact(
     if (!storagePath) return { ok: false, kind: "not_found" };
     // Legacy exports have no intake payload. New artifacts must carry a valid
     // manifest; ownership of the export job alone cannot preserve revoked access.
+    /** Recheck the artifact's intake scope before and after fetching its bytes. */
     const intakeAllowed = () => row.result!.intake_format === undefined
         ? Promise.resolve(row.result!.intake_manifest === undefined)
         : row.result!.intake_format === 1

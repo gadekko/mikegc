@@ -98,6 +98,7 @@ const configuration = (revision = 1): IntakeConfiguration => ({
 });
 const request = (overrides: Partial<IntakeRequest> = {}): IntakeRequest => ({
   incarnation_id: "incarnation-a",
+  export_revision: 1,
   id: "request-a",
   org_id: "org-a",
   requester_id: "requester",
@@ -268,6 +269,56 @@ describe("configuration revisions and MFA", () => {
 });
 
 describe("request forms and list loading", () => {
+  it("limits the owner-reviewer's queue filter to current intake reviewers", async () => {
+    mocks.configuration.mockResolvedValue({
+      ...configuration(),
+      can_configure: true,
+      is_reviewer: true,
+    });
+    mocks.reviewers.mockResolvedValue([
+      {
+        user_id: "owner-reviewer",
+        display_name: "Owner Reviewer",
+        email: "owner@example.test",
+        is_reviewer: true,
+      },
+      {
+        user_id: "member",
+        display_name: "Ordinary Member",
+        email: "member@example.test",
+        is_reviewer: false,
+      },
+      {
+        user_id: "lawyer-a",
+        display_name: "Lawyer A",
+        email: "a@example.test",
+        is_reviewer: true,
+      },
+    ]);
+    render(<Inbox orgId="org-a" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Legal queue" }));
+    const filter = screen.getByRole("combobox", {
+      name: "Filter by assigned lawyer",
+    });
+    expect(
+      Array.from((filter as HTMLSelectElement).options, (option) => ({
+        label: option.text,
+        value: option.value,
+      })),
+    ).toEqual([
+      { label: "All assigned lawyers", value: "" },
+      { label: "Owner Reviewer", value: "owner-reviewer" },
+      { label: "Lawyer A", value: "lawyer-a" },
+    ]);
+    fireEvent.change(filter, { target: { value: "lawyer-a" } });
+    await waitFor(() =>
+      expect(mocks.list).toHaveBeenLastCalledWith(
+        "org-a",
+        expect.objectContaining({ view: "queue", assignee: "lawyer-a" }),
+      ),
+    );
+  });
+
   it("does not hide a failed configuration behind a successful list", async () => {
     const list = deferred<IntakeRequest[]>();
     mocks.configuration.mockRejectedValue(

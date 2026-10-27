@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { getIntakeConfiguration } from "@/app/lib/mikeApi";
+/** Discover configured intake for the current workspace and refresh when focus returns. */
 export function useIntakeNavigation(accountId: string | null, orgId?: string) {
   const key = `${accountId}:${orgId}`;
   const [loaded, setLoaded] = useState<{

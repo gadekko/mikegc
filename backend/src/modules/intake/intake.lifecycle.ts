@@ -14,6 +14,7 @@ export interface IntakeExport {
     events: IntakeEvent[];
   }[];
 }
+/** Stop lifecycle work when the authorized RPC fails, without exposing database details. */
 async function required<T>(
   db: Db,
   name: string,
@@ -26,6 +27,7 @@ async function required<T>(
     );
   return result.data;
 }
+/** Build the requester's paginated snapshot and reject concurrent changes or erasure. */
 export async function buildIntakeExport(
   db: Db,
   userId: string,
@@ -39,6 +41,7 @@ export async function buildIntakeExport(
       p_limit: 100,
     });
     for (const request of page) {
+      /** Read every history page before checking that the request snapshot is still current. */
       const history = async <T>(events: boolean): Promise<T[]> => {
         const rows: T[] = [];
         for (let offset = 0; ; offset += 100) {
@@ -63,7 +66,8 @@ export async function buildIntakeExport(
       });
       if (
         current.version !== request.version ||
-        current.incarnation_id !== request.incarnation_id
+        current.incarnation_id !== request.incarnation_id ||
+        current.export_revision !== request.export_revision
       ) {
         throw new Error(
           "Intake changed during export; retry to build a consistent snapshot.",
@@ -79,12 +83,14 @@ export async function buildIntakeExport(
     requests: requests.map((x) => ({
       id: x.request.id,
       incarnation_id: x.request.incarnation_id,
+      export_revision: x.request.export_revision,
     })),
   };
   if (!(await validateIntakeExport(db, userId, manifest)))
     throw new Error("Intake export scope changed during generation.");
   return { version: 1, requests };
 }
+/** Recheck access, immutable request identity and erasure revision before serving bytes. */
 export async function validateIntakeExport(
   db: Db,
   userId: string,
@@ -102,7 +108,9 @@ export async function validateIntakeExport(
         !row ||
         typeof row !== "object" ||
         !uuid.test(row.id) ||
-        !uuid.test(row.incarnation_id),
+        !uuid.test(row.incarnation_id) ||
+        !Number.isSafeInteger(row.export_revision) ||
+        row.export_revision < 1,
     )
   )
     return false;
@@ -115,12 +123,7 @@ export async function validateIntakeExport(
   }
   return true;
 }
-export async function eraseIntakeIdentity(
-  db: Db,
-  userId: string,
-): Promise<void> {
-  await required(db, "intake_erase_identity", { p_actor: userId });
-}
+/** Permanently purge request content through the owner-authorized transaction. */
 export async function purgeIntake(
   db: Db,
   orgId: string,

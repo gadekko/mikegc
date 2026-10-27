@@ -3,6 +3,7 @@ import type { Db } from "../../../lib/supabase";
 import { buildIntakeExport, validateIntakeExport } from "../intake.lifecycle";
 import { intakeRpc } from "../intake.requests";
 const id = "00000000-0000-4000-8000-000000000001";
+const export_revision = 1;
 const incarnation_id = "00000000-0000-4000-8000-000000000002";
 describe("intake export consistency", () => {
   it("refuses a request whose version changed between history reads", async () => {
@@ -10,17 +11,43 @@ describe("intake export consistency", () => {
       error: null,
       data:
         name === "intake_export_requests"
-          ? [{ id, incarnation_id, org_id: id, version: 1 }]
+          ? [{ id, incarnation_id, export_revision, org_id: id, version: 1 }]
           : name === "intake_get_request"
-            ? { id, incarnation_id, version: 2 }
+            ? { id, incarnation_id, export_revision, version: 2 }
             : [],
     }));
     await expect(
       buildIntakeExport({ rpc } as unknown as Db, id),
     ).rejects.toThrow("changed during export");
   });
+  it("rejects contributor erasure during history collection even without a content-version change", async () => {
+    const rpc = vi.fn(async (name: string) => ({
+      error: null,
+      data: name === "intake_export_requests"
+        ? [{ id, incarnation_id, export_revision, org_id: id, version: 1 }]
+        : name === "intake_get_request"
+          ? { id, incarnation_id, export_revision: 2, version: 1 }
+          : [],
+    }));
+    await expect(buildIntakeExport({ rpc } as unknown as Db, id))
+      .rejects.toThrow("changed during export");
+  });
+  it("rejects contributor erasure after the last snapshot read", async () => {
+    const row = { id, incarnation_id, export_revision, org_id: id, version: 1 };
+    const rpc = vi.fn(async (name: string) => ({
+      error: null,
+      data: name === "intake_export_requests" ? [row]
+        : name === "intake_get_request" ? row
+          : name === "intake_validate_export" ? false : [],
+    }));
+    await expect(buildIntakeExport({ rpc } as unknown as Db, id))
+      .rejects.toThrow("scope changed during generation");
+    expect(rpc).toHaveBeenLastCalledWith("intake_validate_export", {
+      p_actor: id, p_requests: [{ id, incarnation_id, export_revision }],
+    });
+  });
   it("pages both child histories and validates precisely the serialized requests", async () => {
-    const row = { id, incarnation_id, org_id: id, version: 1 };
+    const row = { id, incarnation_id, export_revision, org_id: id, version: 1 };
     const rpc = vi.fn(async (name: string, args: Record<string, unknown>) => ({
       error: null,
       data:
@@ -40,7 +67,7 @@ describe("intake export consistency", () => {
     expect(result.requests[0].events).toHaveLength(101);
     expect(rpc).toHaveBeenCalledWith("intake_validate_export", {
       p_actor: id,
-      p_requests: [{ id, incarnation_id }],
+      p_requests: [{ id, incarnation_id, export_revision }],
     });
   });
   it.each([
@@ -49,6 +76,8 @@ describe("intake export consistency", () => {
     { version: 2, requests: [] },
     { version: 1, request_ids: [id] },
     { version: 1, requests: [{ id }] },
+    { version: 1, requests: [{ id, incarnation_id }] },
+    ...[0, -1, 1.5, "1"].map(export_revision => ({ version: 1, requests: [{ id, incarnation_id, export_revision }] })),
     { version: 1, requests: [{ id: "x", incarnation_id }] },
   ])("fails closed for a malformed manifest %j", async (manifest) => {
     const rpc = vi.fn();
@@ -62,7 +91,7 @@ describe("intake export consistency", () => {
     expect(
       await validateIntakeExport({ rpc } as unknown as Db, id, {
         version: 1,
-        requests: [{ id, incarnation_id }],
+        requests: [{ id, incarnation_id, export_revision }],
       }),
     ).toBe(false);
   });

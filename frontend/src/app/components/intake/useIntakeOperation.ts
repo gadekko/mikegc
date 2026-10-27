@@ -34,6 +34,7 @@ export function useIntakeOperation(
       });
     }
   }, [view, snapshot.outcome, onSaved, onRejected]);
+  /** Run or reconcile the retained command without replacing an unresolved operation. */
   async function execute(operation?: () => Promise<IntakeReceipt>) {
     if (!view.valid || view.busy || view.outcome || (view.pending && operation))
       return;
@@ -103,6 +104,7 @@ export function useIntakeOperation(
   };
 }
 
+/** Warn before leaving a draft; in-tab navigation retains it, explicit discard does not. */
 export function useIntakeDraftWarning(dirty: boolean) {
   const confirmDiscard = () =>
     !dirty || window.confirm("Leave this draft? Unsaved text will be lost.");
@@ -160,6 +162,7 @@ export function useIntakeDraftWarning(dirty: boolean) {
   }, [dirty]);
   return confirmDiscard;
 }
+/** Describe an intake load failure without exposing raw service errors. */
 export function intakeError(error: unknown) {
   return describeError(error, { action: "load legal requests" }).message;
 }

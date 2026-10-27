@@ -43,7 +43,9 @@ notes, email delivery, scheduled processing or automatic legal decisions.
 - Pausing intake stops new submissions and changes. Existing authorized records
   remain readable. An owner can select replacement reviewers and resume it.
 - Requests belong to the organization and remain when a member leaves. Account
-  deletion clears identity references and command receipts involving the account;
+  deletion clears identity references and command receipts involving the account
+  in the same transaction that deletes the Auth identity. A storage cleanup
+  failure leaves that attribution intact so the deletion worker can retry;
   names or other information typed into request text are not rewritten.
 - Organization deletion uses the existing 30-day recovery period. Requests are
   unavailable while the organization is deleted, return on restoration, and
@@ -56,10 +58,13 @@ notes, email delivery, scheduled processing or automatic legal decisions.
 An account export includes only the caller's currently readable own requests,
 with complete shared messages and history. Queue membership alone does not
 export other people's requests. Each stored export carries the exact request
-IDs and immutable creation identities represented in its bytes. Download checks
-current access before and after reading storage. Membership loss, request purge
-or organization deletion invalidates the affected artifact; create a new export
-when scope changes. Pre-intake export artifacts remain compatible.
+IDs, immutable creation identities and identity-erasure revisions represented in
+its bytes. Download checks these and current access before and after reading
+storage. Membership loss, request purge, organization deletion or deletion of a
+contributor's account invalidates the affected artifact. A new export preserves
+request text while showing erased contributors as former members. Intake
+artifacts without an erasure revision must also be rebuilt. Pre-intake export
+artifacts remain compatible.
 
 ## Reliability
 

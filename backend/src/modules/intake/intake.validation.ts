@@ -1,5 +1,6 @@
 import { z } from "zod";
 export const intakeId = z.uuid();
+/** Bound submitted text without changing the exact content later shown for review. */
 const text = (max: number) =>
   z
     .string()

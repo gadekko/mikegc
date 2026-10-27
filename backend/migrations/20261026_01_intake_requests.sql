@@ -16,6 +16,7 @@ create table if not exists public.intake_reviewers (
 );
 create table if not exists public.intake_requests (
   incarnation_id uuid not null default gen_random_uuid(),
+  export_revision integer not null default 1 check(export_revision > 0),
   id uuid primary key,
   org_id uuid not null references public.intake_settings(org_id) on delete cascade,
   requester_id uuid references auth.users(id) on delete set null,
@@ -33,6 +34,8 @@ create table if not exists public.intake_requests (
   check ((requested_by_date is null) = (timezone is null)),
   check (timezone is null or char_length(timezone) between 1 and 100)
 );
+-- Also supports replay against a local database that ran this unshipped draft.
+alter table public.intake_requests add column if not exists export_revision integer not null default 1 check(export_revision > 0);
 create index if not exists intake_requests_org_created on public.intake_requests(org_id,created_at,id);
 create index if not exists intake_requests_requester on public.intake_requests(requester_id,org_id);
 create index if not exists intake_requests_assignee_state on public.intake_requests(org_id,assignee_id,state);
@@ -82,6 +85,18 @@ create table if not exists public.intake_purged_commands (
   command_id uuid not null,
   primary key(org_id,actor_id,command_id)
 );
+
+-- User-leading indexes serve Auth FK cleanup and targeted identity erasure.
+create index if not exists intake_reviewers_user on public.intake_reviewers(user_id,org_id);
+create index if not exists intake_reviewers_added_by on public.intake_reviewers(added_by);
+create index if not exists intake_requests_assignee on public.intake_requests(assignee_id,org_id);
+create index if not exists intake_messages_author on public.intake_messages(author_id,request_id);
+create index if not exists intake_events_actor on public.intake_events(actor_id,request_id);
+create index if not exists intake_events_assignee on public.intake_events(assignee_id,request_id);
+create index if not exists intake_commands_actor on public.intake_commands(actor_id,org_id);
+create index if not exists intake_commands_assignee on public.intake_commands((input->>'assignee'));
+create index if not exists intake_commands_reviewers on public.intake_commands using gin ((input->'reviewers') jsonb_path_ops);
+create index if not exists intake_purged_commands_actor on public.intake_purged_commands(actor_id,org_id);
 
 -- Membership reads never inherit content access from an administrative role.
 create or replace function public.intake_member_role(p_org uuid,p_actor uuid)
@@ -381,10 +396,27 @@ end $$;
 create or replace function public.intake_erase_identity(p_actor uuid)
 returns void language plpgsql set search_path=public,pg_temp as $$
 begin
-  perform o.id from public.organizations o where exists(select 1 from public.intake_requests r
-    where r.org_id=o.id and (coalesce(r.requester_id=p_actor,false) or coalesce(r.assignee_id=p_actor,false)))
-    or exists(select 1 from public.intake_reviewers v where v.org_id=o.id and v.user_id=p_actor)
-    order by o.id for update;
+  -- Find affected organizations through user-leading indexes, including former
+  -- contributors whose only remaining identity is in history or a receipt.
+  perform o.id from public.organizations o where o.id in (
+    select org_id from public.intake_requests where requester_id=p_actor
+    union select org_id from public.intake_requests where assignee_id=p_actor
+    union select org_id from public.intake_messages where author_id=p_actor
+    union select org_id from public.intake_events where actor_id=p_actor or assignee_id=p_actor
+    union select org_id from public.intake_reviewers where user_id=p_actor or added_by=p_actor
+    union select org_id from public.intake_commands where actor_id=p_actor or input->>'assignee'=p_actor::text
+      or (input->'reviewers') @> to_jsonb(array[p_actor])
+    union select org_id from public.intake_purged_commands where actor_id=p_actor
+  ) order by o.id for update;
+  -- Invalidate stored snapshots before deleting any attribution. Incarnation
+  -- remains the immutable identity of this request; export_revision changes
+  -- only when an erasure makes previously serialized identity unsafe to serve.
+  update public.intake_requests set export_revision=export_revision+1,
+    version=version+1,updated_at=now() where id in (
+      select id from public.intake_requests where requester_id=p_actor or assignee_id=p_actor
+      union select request_id from public.intake_messages where author_id=p_actor
+      union select request_id from public.intake_events where actor_id=p_actor or assignee_id=p_actor
+    );
   delete from public.intake_reviewers where user_id=p_actor;
   delete from public.intake_purged_commands where actor_id=p_actor;
   -- Receipts embed typed command input. Delete references to the erased person
@@ -421,9 +453,9 @@ end $$;
 create or replace function public.intake_validate_export(p_actor uuid,p_requests jsonb)
 returns boolean language sql stable set search_path=public,pg_temp as $$
   select jsonb_array_length(p_requests)<=100 and not exists(
-    select 1 from jsonb_to_recordset(p_requests) x(id uuid,incarnation_id uuid)
+    select 1 from jsonb_to_recordset(p_requests) x(id uuid,incarnation_id uuid,export_revision integer)
     where not exists(select 1 from public.intake_requests r where r.id=x.id
-      and r.incarnation_id=x.incarnation_id and coalesce(r.requester_id=p_actor,false)
+      and r.incarnation_id=x.incarnation_id and r.export_revision=x.export_revision and coalesce(r.requester_id=p_actor,false)
       and public.intake_can_read(r.org_id,p_actor,r.id)))
 $$;
 

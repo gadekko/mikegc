@@ -494,6 +494,7 @@ export async function buildProjectExportManifest(db: Db, projectId: string) {
     });
 }
 
+/** Build account data from currently readable resources, including complete own-request intake history. */
 export async function buildUserAccountExport(
     db: Db,
     userId: string,

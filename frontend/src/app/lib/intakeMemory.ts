@@ -21,6 +21,7 @@ export type IntakeViewMemory = {
 };
 let account: string | null = null;
 const views = new Map<string, IntakeViewMemory>();
+/** Create an empty tab-only draft and command state with a stable initial snapshot. */
 export function createIntakeMemory(): IntakeViewMemory {
   return {
     valid: true,
@@ -40,6 +41,7 @@ export function createIntakeMemory(): IntakeViewMemory {
     outcome: null,
   };
 }
+/** Publish a new immutable snapshot after mutating the retained view state. */
 export function notifyIntakeMemory(view: IntakeViewMemory) {
   view.version++;
   // React (including the compiler) must observe a new immutable snapshot.
@@ -65,6 +67,7 @@ export function setIntakeMemoryAccount(next: string | null) {
   views.clear();
   account = next;
 }
+/** Reuse a view within its account and organization, revoking views on account changes. */
 export function getIntakeMemory(
   accountId: string,
   orgId: string,
@@ -79,6 +82,7 @@ export function getIntakeMemory(
   }
   return view;
 }
+/** Clear draft fields only when no command or undelivered outcome needs recovery. */
 export function discardIntakeDraft(view: IntakeViewMemory) {
   if (view.busy || view.pending || view.outcome) return false;
   view.values.clear();

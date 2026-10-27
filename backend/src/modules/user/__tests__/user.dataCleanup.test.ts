@@ -147,7 +147,6 @@ function makeDb(
         async rpc(name: string, args: Record<string, unknown>) {
             // These fixtures exercise the post-offboarding data/storage cascade.
             // Departure classification and atomicity have real PostgreSQL tests.
-            if (name === "intake_erase_identity") return { data: null, error: null };
             if (name === "prepare_account_org_departures") return { data: null, error: null };
             if (name === "org_default_departure_successor") {
                 const departing = args.p_departing as string[];
@@ -876,8 +875,9 @@ describe("deleteUserAccountData", () => {
     // means the deletion "succeeds" while a full export survives with nothing
     // left to retry its removal — so failures must propagate and let the
     // durable job retry.
-    it("propagates an export-prefix listing failure so the durable job retries", async () => {
+    it("preserves intake identity when export-prefix listing fails and the durable job retries", async () => {
         const { db } = fixture();
+        const rpc = vi.spyOn(db, "rpc");
         listFilesMock.mockImplementation(async (prefix: string) => {
             if (prefix === "exports/u1/") throw new Error("storage unavailable");
             return [];
@@ -885,10 +885,12 @@ describe("deleteUserAccountData", () => {
         await expect(
             deleteUserAccountData(db, "u1", "u1@example.com"),
         ).rejects.toThrow(/export/i);
+        expect(rpc).not.toHaveBeenCalledWith("intake_erase_identity", expect.anything());
     });
 
-    it("propagates an export-artifact delete failure so the durable job retries", async () => {
+    it("preserves intake identity when export-artifact deletion fails and the durable job retries", async () => {
         const { db } = fixture();
+        const rpc = vi.spyOn(db, "rpc");
         listFilesMock.mockImplementation(async (prefix: string) =>
             prefix === "exports/u1/" ? ["exports/u1/e1-account.json"] : [],
         );
@@ -899,6 +901,7 @@ describe("deleteUserAccountData", () => {
         await expect(
             deleteUserAccountData(db, "u1", "u1@example.com"),
         ).rejects.toThrow(/export/i);
+        expect(rpc).not.toHaveBeenCalledWith("intake_erase_identity", expect.anything());
     });
 
     it("keeps every storage byte until the last doomed row is gone", async () => {

@@ -31,6 +31,7 @@ import {
   useIntakeDraftWarning,
   useIntakeOperation,
 } from "./useIntakeOperation";
+/** Scope a deep-linked request to its organization before mounting retained drafts. */
 export function IntakeDetail({
   orgId,
   requestId,
@@ -50,6 +51,7 @@ export function IntakeDetail({
     />
   );
 }
+/** Read the complete message or event history using the API's 100-row pages. */
 async function allPages<T>(read: (offset: number) => Promise<T[]>) {
   const rows: T[] = [];
   for (let offset = 0; ; offset += 100) {
@@ -58,6 +60,7 @@ async function allPages<T>(read: (offset: number) => Promise<T[]>) {
     if (page.length < 100) return rows;
   }
 }
+/** Show the current request and gate commands on its server-provided capabilities. */
 export function Detail({
   orgId,
   requestId,
@@ -147,6 +150,7 @@ export function Detail({
     memory,
   );
   useIntakeDraftWarning(!!draft || operation.locked);
+  /** Capture the displayed request version and reuse one command when recovering a save. */
   function command(
     action: IntakeAction,
     body?: string,

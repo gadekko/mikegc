@@ -349,6 +349,170 @@ describe.skipIf(!url || !key || !anon)(
         await db.auth.admin.deleteUser(id);
       }
     });
+    it("retains requester identity and receipts after storage failure, then erases them on worker retry", async () => {
+      const created = await db.auth.admin.createUser({
+        email: `intake-retry-${randomUUID()}@test.local`, email_confirm: true,
+      });
+      expect(created.error).toBeNull();
+      const user = created.data.user!;
+      const requestId = randomUUID();
+      const commandId = randomUUID();
+      const { handleAccountDelete } = await import("../../modules/user/user.accountJobs.js");
+      const { setStorageAdapter } = await import("../../lib/storage.js");
+      const { createFilesystemStorageAdapter } = await import("../../lib/storage/filesystem.js");
+      const filesystem = createFilesystemStorageAdapter();
+      const job: DbJob = {
+        id: randomUUID(), kind: "account.delete", payload: { userId: user.id, userEmail: user.email },
+        status: "running", attempts: 1, max_attempts: 20, run_at: new Date().toISOString(),
+        created_at: new Date().toISOString(), claimed_at: new Date().toISOString(),
+        finished_at: null, last_error: null, dedupe_key: null, result: null,
+      };
+      let erased = false;
+      try {
+        expect((await db.from("org_members").insert({ org_id: org, user_id: user.id, role: "member" })).error).toBeNull();
+        expect((await db.rpc("intake_submit_request", {
+          p_org: org, p_actor: user.id, p_request: requestId, p_command: commandId,
+          p_category: "general", p_subject: "Retry erasure", p_description: "Retained organization text",
+        })).error).toBeNull();
+        setStorageAdapter({
+          ...filesystem,
+          async listFiles(prefix) {
+            if (prefix === `exports/${user.id}/`) throw new Error("Synthetic storage failure");
+            return filesystem.listFiles(prefix);
+          },
+        });
+        await expect(handleAccountDelete(db, job)).rejects.toThrow("Failed to list export artifacts");
+        setStorageAdapter(filesystem);
+        expect((await db.auth.admin.getUserById(user.id)).data.user?.id).toBe(user.id);
+        const retained = await db.from("intake_requests").select("requester_id,export_revision").eq("id", requestId).single();
+        expect(retained.error).toBeNull();
+        expect(retained.data).toEqual({ requester_id: user.id, export_revision: 1 });
+        expect((await db.from("intake_commands").select("command_id").eq("command_id", commandId)).data)
+          .toEqual([{ command_id: commandId }]);
+        await handleAccountDelete(db, job);
+        erased = true;
+        expect((await db.auth.admin.getUserById(user.id)).data.user).toBeNull();
+        expect((await db.from("intake_requests").select("requester_id,export_revision,description").eq("id", requestId).single()).data)
+          .toEqual({ requester_id: null, export_revision: 2, description: "Retained organization text" });
+        expect((await db.from("intake_commands").select("command_id").eq("command_id", commandId)).data).toEqual([]);
+      } finally {
+        setStorageAdapter(filesystem);
+        expect((await db.from("intake_requests").delete().eq("id", requestId)).error).toBeNull();
+        if (!erased) expect((await db.auth.admin.deleteUser(user.id)).error).toBeNull();
+      }
+    }, 60000);
+    it.each(["stored", "during-read", "during-generation"])(
+      "invalidates erased contributor identity %s and rebuilds an anonymous export", async (timing) => {
+        const contributorEmail = `erased-contributor-${randomUUID()}@test.local`;
+        const created = await db.auth.admin.createUser({ email: contributorEmail, email_confirm: true });
+        expect(created.error).toBeNull();
+        const contributor = created.data.user!.id;
+        const requestId = randomUUID();
+        const jobs: string[] = [];
+        let erased = false;
+        const { startUserExport, loadUserExportArtifact } = await import("../../modules/user/user.export.js");
+        const { handleExportBuild } = await import("../../modules/user/user.exportJobs.js");
+        const { processClaimedJob } = await import("../../lib/dbq/runner.js");
+        const { setStorageAdapter } = await import("../../lib/storage.js");
+        const { createFilesystemStorageAdapter } = await import("../../lib/storage/filesystem.js");
+        const filesystem = createFilesystemStorageAdapter();
+        const erase = async () => {
+          expect((await db.auth.admin.deleteUser(contributor)).error).toBeNull();
+          erased = true;
+        };
+        const build = async () => {
+          const started = await startUserExport(db, {
+            userId: users[1].id, type: "account",
+            payload: { userId: users[1].id, userEmail: users[1].email, type: "account" },
+          });
+          expect(started.ok).toBe(true);
+          if (!started.ok) throw new Error(started.detail);
+          jobs.push(started.exportId);
+          const claimed = await db.rpc("claim_db_job", { p_id: started.exportId, p_stale_seconds: 600 });
+          expect(claimed.error).toBeNull();
+          const job = (claimed.data as DbJob[]).find(x => x.id === started.exportId);
+          expect(job).toBeTruthy();
+          await processClaimedJob(db, { "export.build": handleExportBuild }, job!);
+          return started.exportId;
+        };
+        try {
+          expect((await db.from("intake_requests").insert({
+            id: requestId, org_id: org, requester_id: users[1].id,
+            category: "general", subject: "Erasure export fixture", description: "Retained request",
+            state: "resolved",
+          })).error).toBeNull();
+          // A former contributor remains only in history, with no current assignment or roster entry.
+          expect((await db.from("intake_messages").insert({
+            org_id: org, request_id: requestId, author_id: contributor,
+            kind: "answer", body: "Retained reviewed answer",
+          })).error).toBeNull();
+          expect((await db.from("intake_events").insert({
+            org_id: org, request_id: requestId, actor_id: contributor,
+            assignee_id: contributor, kind: "publish",
+          })).error).toBeNull();
+          if (timing === "during-generation") {
+            const { buildIntakeExport } = await import("../../modules/intake/intake.service.js");
+            // The barrier wraps real RPC responses; every read and Auth mutation hits the local stack.
+            const originalRpc = db.rpc.bind(db);
+            const rpc = vi.spyOn(db, "rpc").mockImplementation(((name: string, args: Record<string, unknown>) => {
+              const result = originalRpc(name, args);
+              if (name !== "intake_read_history" || args.p_request !== requestId || erased) return result;
+              return Promise.resolve(result).then(async response => {
+                await erase();
+                return response;
+              });
+            }) as typeof db.rpc);
+            try {
+              await expect(buildIntakeExport(db, users[1].id)).rejects.toThrow("changed during export");
+            } finally {
+              rpc.mockRestore();
+            }
+          } else {
+            const artifactId = await build();
+            const before = await loadUserExportArtifact(db, artifactId, users[1].id);
+            expect(before.ok).toBe(true);
+            if (!before.ok) throw new Error(before.kind);
+            expect(before.body.toString()).toContain(contributorEmail);
+            let read = false;
+            if (timing === "stored") await erase();
+            else setStorageAdapter({
+              ...filesystem,
+              async downloadFile(key) {
+                const bytes = await filesystem.downloadFile(key);
+                expect(bytes).not.toBeNull();
+                read = true;
+                await erase();
+                return bytes;
+              },
+            });
+            try {
+              expect(await loadUserExportArtifact(db, artifactId, users[1].id))
+                .toEqual({ ok: false, kind: "expired" });
+              expect(read).toBe(timing === "during-read");
+            } finally {
+              setStorageAdapter(filesystem);
+            }
+            expect(await loadUserExportArtifact(db, artifactId, users[1].id))
+              .toEqual({ ok: false, kind: "expired" });
+          }
+          expect(erased).toBe(true);
+          const regenerated = await loadUserExportArtifact(db, await build(), users[1].id);
+          expect(regenerated.ok).toBe(true);
+          if (!regenerated.ok) throw new Error(regenerated.kind);
+          expect(regenerated.body.toString()).not.toContain(contributorEmail);
+          const retained = JSON.parse(regenerated.body.toString()).intake.requests
+            .find((item: { request: { id: string } }) => item.request.id === requestId);
+          expect(retained.request.export_revision).toBe(2);
+          expect(retained.messages[0]).toMatchObject({ body: "Retained reviewed answer", author_name: "Former member" });
+          expect(retained.events[0].actor_name).toBe("Former member");
+        } finally {
+          setStorageAdapter(filesystem);
+          if (jobs.length) expect((await db.from("db_jobs").delete().in("id", jobs)).error).toBeNull();
+          expect((await db.from("intake_requests").delete().eq("id", requestId)).error).toBeNull();
+          if (!erased) expect((await db.auth.admin.deleteUser(contributor)).error).toBeNull();
+        }
+      }, 60000,
+    );
     it("exports over 1,000 requests through the real worker and denies the stored artifact after revocation", async () => {
       const rows = Array.from({ length: 1001 }, (_, i) => ({
         id: randomUUID(),
@@ -407,7 +571,7 @@ describe.skipIf(!url || !key || !anon)(
       expect(downloaded.ok).toBe(true);
       if (!downloaded.ok) throw new Error(downloaded.kind);
       const exported = JSON.parse(downloaded.body.toString()).intake
-        .requests as { request: { id: string; incarnation_id: string } }[];
+        .requests as { request: { id: string; incarnation_id: string; export_revision: number } }[];
       expect(exported.length).toBeGreaterThan(1000);
       expect(new Set(exported.map((x) => x.request.id)).size).toBe(
         exported.length,
@@ -416,6 +580,7 @@ describe.skipIf(!url || !key || !anon)(
         exported.map((x) => ({
           id: x.request.id,
           incarnation_id: x.request.incarnation_id,
+          export_revision: x.request.export_revision,
         })),
       );
       expect(

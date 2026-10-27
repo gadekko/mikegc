@@ -22,6 +22,7 @@ import {
   useIntakeDraftWarning,
   useIntakeOperation,
 } from "./useIntakeOperation";
+/** Mount owner-only intake settings with account and organization draft isolation. */
 export function IntakeSettings() {
   const { orgId, org } = useOrganizationSettings();
   const { accountId } = useWorkspace();
@@ -29,6 +30,7 @@ export function IntakeSettings() {
     return <p>Only organization owners can configure intake.</p>;
   return <Settings key={`${accountId}:${orgId}`} orgId={orgId} />;
 }
+/** Keep reviewer edits bound to their loaded configuration revision through conflicts. */
 export function Settings({ orgId }: { orgId: string }) {
   const memory = useIntakeMemory(orgId, "settings");
   const [baseRevision, setBaseRevision] = useIntakeDraft<number | null>(
@@ -108,6 +110,7 @@ export function Settings({ orgId }: { orgId: string }) {
       active = false;
     };
   }, [orgId, reload, memory, setEnabled, setSelected, setBaseRevision]);
+  /** Retain the exact configuration command for MFA retry and uncertain-save recovery. */
   function save(body: IntakeConfigurationCommand) {
     setSubmitted(body);
     void operation.execute(async () => {

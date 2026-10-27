@@ -352,12 +352,59 @@ describe.skipIf(!container)("intake real PostgreSQL transactions", () => {
     const incarnation = sql(
       "select incarnation_id from public.intake_requests",
     );
-    const check = `select public.intake_validate_export(${q(2)},'[ {"id":"${uid(20)}","incarnation_id":"${incarnation}"} ]'::jsonb)`;
+    const check = `select public.intake_validate_export(${q(2)},'[ {"id":"${uid(20)}","incarnation_id":"${incarnation}","export_revision":1} ]'::jsonb)`;
     expect(sql(check)).toBe("t");
     sql(`select public.intake_purge(${q(10)},${q(1)})`);
     expect(sql(check)).toBe("f");
     sql(submit(150));
     expect(sql(check)).toBe("f");
+  });
+  it.each(["requester", "assignee", "message", "event_actor", "event_assignee"])(
+    "invalidates snapshots for erased %s identity without replacing the request", (source) => {
+      sql(submit());
+      const original = json("select to_jsonb(r) from public.intake_requests r");
+      // History-only contributors need not still belong to the roster or organization.
+      if (source === "assignee") sql(`update public.intake_requests set assignee_id=${q(5)}`);
+      if (source === "message") sql(`insert into public.intake_messages(org_id,request_id,author_id,kind,body)
+        values(${q(10)},${q(20)},${q(5)},'answer','Retained text')`);
+      if (source.startsWith("event")) sql(`insert into public.intake_events(org_id,request_id,${source === "event_actor" ? "actor_id" : "assignee_id"},kind)
+        values(${q(10)},${q(20)},${q(5)},'assign')`);
+      const erased = source === "requester" ? 2 : 5;
+      sql(`select public.remove_org_member(${q(10)},${q(erased)},${q(1)})`);
+      const manifest = JSON.stringify([{ id: original.id, incarnation_id: original.incarnation_id, export_revision: 1 }]);
+      sql(`delete from auth.users where id=${q(erased)}`);
+      const current = json("select to_jsonb(r) from public.intake_requests r");
+      expect(current.incarnation_id).toBe(original.incarnation_id);
+      expect(current.export_revision).toBe(2);
+      expect(current.version).toBe(2);
+      expect(current.description).toBe(original.description);
+      expect(sql(`select public.intake_validate_export(${q(2)},'${manifest}'::jsonb)`)).toBe("f");
+      if (erased !== 2) {
+        const refreshed = JSON.stringify([{ id: current.id, incarnation_id: current.incarnation_id, export_revision: 2 }]);
+        expect(sql(`select public.intake_validate_export(${q(2)},'${refreshed}'::jsonb)`)).toBe("t");
+        expect(JSON.stringify(json(`select public.intake_read_history(${q(10)},${q(2)},${q(20)},${source.startsWith("event")})`)))
+          .not.toContain("person5@example.test");
+      }
+      // A retry after attribution is gone cannot invalidate the fresh artifact.
+      sql(`select public.intake_erase_identity(${q(erased)})`);
+      expect(sql("select export_revision from public.intake_requests")).toBe("2");
+    },
+  );
+  it("rolls back attribution and export invalidation when Auth deletion aborts", () => {
+    sql(submit());
+    sql(`create function public.test_refuse_auth_delete() returns trigger language plpgsql as $$
+      begin raise exception 'Synthetic deletion failure'; end $$;
+      create trigger z_test_refuse_auth_delete before delete on auth.users
+      for each row execute function public.test_refuse_auth_delete();`);
+    try {
+      expect(() => sql(`delete from auth.users where id=${q(2)}`)).toThrow(/Synthetic deletion failure/);
+      expect(json("select jsonb_build_object('requester_id',requester_id,'export_revision',export_revision,'version',version) from public.intake_requests"))
+        .toEqual({ requester_id: uid(2), export_revision: 1, version: 1 });
+      expect(sql(`select count(*) from public.intake_commands where actor_id=${q(2)}`)).toBe("1");
+      expect(sql(`select count(*) from auth.users where id=${q(2)}`)).toBe("1");
+    } finally {
+      sql("drop trigger z_test_refuse_auth_delete on auth.users; drop function public.test_refuse_auth_delete()");
+    }
   });
   it("purges an unconfigured organization without creating a settings row", () => {
     sql(`select public.intake_purge(${q(11)},${q(6)})`);

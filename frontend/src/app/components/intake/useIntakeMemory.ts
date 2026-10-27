@@ -12,6 +12,7 @@ import {
   notifyIntakeMemory,
   type IntakeViewMemory,
 } from "@/app/lib/intakeMemory";
+/** Retrieve tab-only draft memory isolated by account, organization and view identity. */
 export function useIntakeMemory(orgId: string, identity: string) {
   const { accountId } = useWorkspace();
   return useMemo(
@@ -19,6 +20,7 @@ export function useIntakeMemory(orgId: string, identity: string) {
     [accountId, orgId, identity],
   );
 }
+/** Subscribe React to immutable snapshots of the retained view state. */
 export function useIntakeMemorySnapshot(view: IntakeViewMemory) {
   const subscribe = useCallback(
     (listener: () => void) => {
