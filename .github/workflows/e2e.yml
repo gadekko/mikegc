@@ -347,7 +347,7 @@ jobs:
             echo "R2_BUCKET_NAME=mike"
             # Keep the release-job fixture reproducible even when the source
             # repository's main branch changes independently of this PR.
-            echo "MIKE_WORKFLOWS_REF=ce62e6a2d3f47e1d3567a4f2edc61898cfe9e78a"
+            echo "MIKE_WORKFLOWS_REF=d321e133ea5da62cc52923a94f4d5cd7e96c2c27"
             echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"
             echo "ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL"
             # Error reporting is on by default; CI runs must not report.

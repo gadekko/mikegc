@@ -174,7 +174,7 @@ npm run sync:workflows
 ```
 
 The job resolves `MIKE_WORKFLOWS_REF`, downloads and validates the raw
-`Open-Legal-Products/mike-workflows` archive, uploads reference assets to the
+`open-legal-products/mikegc-workflows` archive, uploads reference assets to the
 configured S3-compatible storage, and transactionally replaces the active
 `mike_workflows` catalog. Temporary archive and JSON files are deleted when the
 job exits. Run this as a release job before directing traffic to the new

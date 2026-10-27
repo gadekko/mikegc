@@ -231,7 +231,7 @@ services:
       retries: 20
     restart: unless-stopped
 
-  # --- One-shot: download, validate, and transactionally import mike-workflows.
+  # --- One-shot: download, validate, and transactionally import mikegc-workflows.
   workflow-sync:
     build:
       context: .
