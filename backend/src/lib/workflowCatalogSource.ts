@@ -5,7 +5,7 @@ import path from "path";
 import JSZip, { type JSZipObject } from "jszip";
 import { parse as parseYaml } from "yaml";
 
-const DEFAULT_REPOSITORY = "Open-Legal-Products/mike-workflows";
+const DEFAULT_REPOSITORY = "open-legal-products/mikegc-workflows";
 const DEFAULT_REF = "main";
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;

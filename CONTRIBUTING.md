@@ -39,10 +39,10 @@ tokens, the primitive inventory, and the full baseline.
     - why
     - testing
 
-## Mike Workflows
+## System Workflows
 
 System workflows live in the sibling
-[`Open-Legal-Products/mike-workflows`](https://github.com/Open-Legal-Products/mike-workflows)
+[`open-legal-products/mikegc-workflows`](https://github.com/open-legal-products/mikegc-workflows)
 repository under `assistant-workflows/` and `tabular-review-workflows/`. Put
 structured metadata in the YAML frontmatter at the top of `SKILL.md`, put
 workflow instructions in the body of `SKILL.md`, and use `table-columns.yaml`
@@ -76,7 +76,7 @@ npm run build
 npm run sync:workflows
 ```
 
-The job resolves the configured `mike-workflows` ref to an immutable commit,
+The job resolves the configured `mikegc-workflows` ref to an immutable commit,
 downloads and validates its archive, writes a temporary local JSON document,
 uploads reference assets to object storage, and transactionally replaces the
 active rows in `mike_workflows`. Its temporary files are deleted before the job
