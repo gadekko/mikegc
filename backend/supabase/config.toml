@@ -2,7 +2,7 @@
 # https://supabase.com/docs/guides/local-development/cli/config
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
-project_id = "backend"
+project_id = "mikegc"
 
 [api]
 enabled = true
@@ -237,10 +237,11 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Deliver local Auth messages through Resend. Keep the API key in backend/.env;
-# config.toml is tracked and must never contain the credential itself.
+# Local Auth messages go to the [local_smtp] inbox (http://localhost:54324).
+# To deliver them through Resend instead, set enabled = true and keep the API
+# key in backend/.env; config.toml is tracked and must never contain it.
 [auth.email.smtp]
-enabled = true
+enabled = false
 host = "smtp.resend.com"
 port = 465
 user = "resend"
