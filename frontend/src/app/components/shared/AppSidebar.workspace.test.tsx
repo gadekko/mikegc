@@ -188,7 +188,7 @@ describe("AppSidebar workspace switcher", () => {
     render(<AppSidebar isOpen onToggle={vi.fn()} />);
 
     expect(heading()).toHaveTextContent("MikeGC");
-    // The wordmark's "GC" takes the walnut brand accent.
+    // The wordmark's "GC" takes the blue brand accent.
     expect(within(heading()).getByText("GC")).toHaveClass(
       "text-(--brand-accent-text)",
     );

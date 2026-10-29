@@ -47,10 +47,9 @@
     --spreadsheet-highlight-background: rgba(59, 130, 246, 0.16);
     --spreadsheet-highlight-outline: #3b82f6;
 
-    /* The "GC" in the MikeGC wordmark: a walnut a few steps lighter than the
-       mark's fill, so it still reads as brown beside near-black "Mike" in a
-       thin serif (5.5:1 on the app surface). */
-    --brand-accent-text: #8b5e3c;
+    /* The "GC" in the MikeGC wordmark: the deepest blue of the mark and the
+       assistant icon (5.1:1 on the app surface). */
+    --brand-accent-text: #2563eb;
 }
 
 .dark {
@@ -94,8 +93,9 @@
     --spreadsheet-highlight-background: rgba(96, 165, 250, 0.24);
     --spreadsheet-highlight-outline: #60a5fa;
 
-    /* A lighter walnut that keeps its contrast on dark surfaces. */
-    --brand-accent-text: #c9a27e;
+    /* The assistant icon's lightest blue, which keeps its contrast on dark
+       surfaces. */
+    --brand-accent-text: #7ab8ff;
 }
 
 .document-tab-bar {
