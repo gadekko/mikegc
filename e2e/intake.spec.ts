@@ -196,9 +196,10 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
       .getByRole("button", { name: "Legal queue", exact: true })
       .click();
     await lawyer.getByRole("link", { name: "Synthetic supplier NDA" }).click();
+    await lawyer.getByLabel("Assigned lawyer", { exact: true }).click();
     await lawyer
-      .getByLabel("Assigned lawyer", { exact: true })
-      .selectOption(people[2].id);
+      .getByRole("menuitem", { name: "Intake Lawyer", exact: true })
+      .click();
     await lawyer.getByRole("button", { name: "Save assignment" }).click();
     await expect(
       lawyer.getByRole("button", { name: "Ask for information" }),
@@ -254,13 +255,15 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
       .getByRole("button", { name: "Share answer and resolve" })
       .click();
     await expect(
-      lawyer.getByText("resolved · NDA request", { exact: true }),
+      lawyer.getByRole("definition").getByText("Resolved", { exact: true }),
     ).toBeVisible();
     expect(commands).toHaveLength(2);
     expect(commands[0]).toEqual(commands[1]);
     await requester.reload();
     await expect(
-      requester.locator("article").getByText(answer, { exact: true }),
+      requester
+        .getByRole("region", { name: "Conversation" })
+        .getByText(answer, { exact: true }),
     ).toHaveCount(1);
     await expect(
       requester.getByRole("button", { name: "Cancel request" }),
@@ -286,7 +289,7 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
         fullPage: true,
       });
       const answerText = requester
-        .locator("article")
+        .getByRole("region", { name: "Conversation" })
         .getByText(answer, { exact: true });
       await answerText.scrollIntoViewIfNeeded();
       expect(

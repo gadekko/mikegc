@@ -96,10 +96,14 @@ describe.skipIf(!container)("intake real PostgreSQL transactions", () => {
       select public.intake_configure(${q(10)},${q(1)},${q(90)},0,true,array[${q(3)},${q(4)}]::uuid[]);`);
   });
   it("keeps Auth lifecycle trigger execution under a trusted owner", () => {
+    // Supabase's postgres role is not a superuser, so require an owner that
+    // can read auth.users and is not one of the API roles.
     expect(
       sql(`select count(*) from pg_proc p join pg_roles r on r.oid=p.proowner
       where p.oid='public.cleanup_removed_org_member_overrides()'::regprocedure
-      and p.prosecdef and r.rolsuper
+      and p.prosecdef
+      and r.rolname not in ('anon','authenticated','service_role','supabase_auth_admin')
+      and has_table_privilege(r.oid,'auth.users','SELECT')
       and 'search_path=pg_catalog, public, pg_temp'=any(p.proconfig)`),
     ).toBe("1");
     for (const role of ["anon", "authenticated", "service_role"])

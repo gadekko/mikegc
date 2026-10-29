@@ -323,6 +323,7 @@ describe.skipIf(!url || !key || !anon)(
           ).error,
         ).toBeNull();
         expect((await db.auth.admin.deleteUser(id)).error).toBeNull();
+        // Losing the last reviewer leaves intake on; submissions wait for a new team.
         expect(
           (
             await db
@@ -331,7 +332,15 @@ describe.skipIf(!url || !key || !anon)(
               .eq("org_id", isolated)
               .single()
           ).data?.enabled,
-        ).toBe(false);
+        ).toBe(true);
+        expect(
+          (
+            await db
+              .from("intake_reviewers")
+              .select("user_id")
+              .eq("org_id", isolated)
+          ).data,
+        ).toEqual([]);
         expect(
           (
             await db
