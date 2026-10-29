@@ -401,6 +401,19 @@ jobs:
       - name: Run Playwright
         run: npx playwright test --project=chromium
 
+      # Auth and PostgREST hide database errors behind generic messages such as
+      # "Database error deleting user"; the containers' own logs name the cause.
+      - name: Print Supabase errors
+        if: failure()
+        run: |
+          for name in db auth rest; do
+            container="$(docker ps -a --filter "name=supabase_${name}_" --format '{{.Names}}' | head -1)"
+            [ -n "$container" ] || continue
+            echo "::group::$container"
+            docker logs "$container" 2>&1 | grep -iE -A3 'error|fatal|exception' | tail -150 || true
+            echo "::endgroup::"
+          done
+
       # always() (not !cancelled()) so the report still uploads when the job is
       # cancelled by the timeout — that's exactly when you most need the traces.
       - uses: actions/upload-artifact@v7
