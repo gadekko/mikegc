@@ -95,7 +95,7 @@ test("uses a floating icon header with no logo, tabs, or visible sign-out button
   await addin.expectAuthedShell();
 
   await expect(page.getByRole("tab")).toHaveCount(0);
-  await expect(page.getByText("Mike", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("MikeGC", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
 
   const header = page.getByTestId("floating-header");
