@@ -263,16 +263,16 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
               ]
             : null;
     // The sidebar is headed by whose work it is showing: the organization's
-    // name in its workspace, and plain "Mike" for personal work. `null` while
-    // a remembered organization's name is still loading — saying "Mike" for
-    // that moment would be naming the wrong workspace.
+    // name in its workspace, and plain "MikeGC" for personal work. `null`
+    // while a remembered organization's name is still loading — saying
+    // "MikeGC" for that moment would be naming the wrong workspace.
     const sidebarHeading = activeOrganization
         ? activeOrganization.name
         : workspaceId &&
             workspaceId !== PERSONAL_WORKSPACE &&
             organizations === null
           ? null
-          : "Mike";
+          : "MikeGC";
     const [recentProjects, setRecentProjects] = useState<Project[] | null>(
         null,
     );
@@ -527,7 +527,16 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                                                 ? "sidebar-heading-enter"
                                                 : undefined
                                         }
-                                    />
+                                    >
+                                        {activeOrganization ? undefined : (
+                                            <>
+                                                Mike
+                                                <span className="text-(--brand-accent-text)">
+                                                    GC
+                                                </span>
+                                            </>
+                                        )}
+                                    </SidebarHeading>
                                 )}
                             </Link>
                         </div>

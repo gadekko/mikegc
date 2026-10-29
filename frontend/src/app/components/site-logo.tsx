@@ -45,7 +45,9 @@ export function SiteLogo({
             >
                 <MikeIcon size={iconSizes[size]} />
             </span>
-            <span>Mike</span>
+            <span>
+                Mike<span className="text-(--brand-accent-text)">GC</span>
+            </span>
         </h1>
     );
 

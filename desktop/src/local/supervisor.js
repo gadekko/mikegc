@@ -265,7 +265,7 @@ async function startLocalStack(app, status = () => {}) {
         // asked to actually send.
         GOTRUE_MAILER_AUTOCONFIRM: "true",
         GOTRUE_SMTP_ADMIN_EMAIL: "admin@mike.local",
-        GOTRUE_SMTP_SENDER_NAME: "Mike",
+        GOTRUE_SMTP_SENDER_NAME: "MikeGC",
         GOTRUE_MAILER_URLPATHS_CONFIRMATION: "/auth/v1/verify",
         GOTRUE_MAILER_URLPATHS_RECOVERY: "/auth/v1/verify",
         GOTRUE_MAILER_URLPATHS_INVITE: "/auth/v1/verify",
@@ -309,7 +309,7 @@ async function startLocalStack(app, status = () => {}) {
 
     // 6. Backend — Electron's own binary in Node mode, so no separate
     // runtime ships with the app.
-    status("Starting Mike services…");
+    status("Starting MikeGC services…");
     const soffice = findSoffice();
     spawnService("backend", process.execPath,
       [path.join(paths.backendDir, "dist", "index.js")], {

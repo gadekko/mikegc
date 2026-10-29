@@ -1,9 +1,9 @@
 {
   "name": "mike-desktop",
-  "productName": "Mike",
+  "productName": "MikeGC",
   "version": "0.1.0",
   "private": true,
-  "description": "Mike for Mac — desktop shell around the Mike web app",
+  "description": "MikeGC for Mac — desktop shell around the MikeGC web app",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",

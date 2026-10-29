@@ -18,7 +18,7 @@ describe("MikeIcon", () => {
     it("renders the dark mark on the light theme", () => {
         const { container } = render(<MikeIcon />);
 
-        expect(firstBladeFill(container)).toBe("rgb(10,10,10)");
+        expect(firstBladeFill(container)).toBe("rgb(79,146,247)");
     });
 
     it("renders the white mark when the document is in dark mode", () => {
@@ -30,7 +30,7 @@ describe("MikeIcon", () => {
 
     it("swaps palettes when the theme class changes while mounted", async () => {
         const { container } = render(<MikeIcon />);
-        expect(firstBladeFill(container)).toBe("rgb(10,10,10)");
+        expect(firstBladeFill(container)).toBe("rgb(79,146,247)");
 
         document.documentElement.classList.add("dark");
 

@@ -7,7 +7,7 @@
 // signed-URL route.
 //
 // Two launch modes:
-//   node e2e/local.e2e.mjs                  # packaged Mike.app (dist:local)
+//   node e2e/local.e2e.mjs                  # packaged MikeGC.app (dist:local)
 //   MIKE_E2E_DEV=1 node e2e/local.e2e.mjs   # electron . (repo dev mode)
 //
 // A fresh userData per run is the point: it exercises the first-run path a

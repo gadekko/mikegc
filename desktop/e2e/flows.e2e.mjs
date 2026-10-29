@@ -1,5 +1,5 @@
 // Regression proof for the shell's fixed flows (see desktop-fix-spec): drives
-// the packaged Mike.app over CDP and asserts, one by one, the behaviors the
+// the packaged MikeGC.app over CDP and asserts, one by one, the behaviors the
 // window-open / navigation / download rework promises:
 //
 //   a. OAuth popup mechanics — window.open("about:blank","mike_mcp_oauth")
@@ -73,7 +73,7 @@ const DOWNLOAD_DIR = path.join(ARTIFACTS, `downloads-flows-${RUN_ID}`);
 const CAPTURE_FILE = path.join(ARTIFACTS, `external-flows-${RUN_ID}.txt`);
 const DOWNLOAD_LOG = path.join(ARTIFACTS, `download-log-${RUN_ID}.jsonl`);
 // Isolated userData so the run never touches the developer's real settings /
-// window bounds and never collides with a running Mike.app on the instance
+// window bounds and never collides with a running MikeGC.app on the instance
 // lock (see MIKE_USER_DATA_DIR in main.js).
 const USER_DATA_DIR = path.join(ARTIFACTS, `userdata-flows-${RUN_ID}`);
 const PDF_FIXTURE = path.join(here, "..", "..", "e2e", "fixtures", "test.pdf");

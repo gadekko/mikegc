@@ -46,6 +46,10 @@
     --spreadsheet-header-selected: rgba(156, 163, 175, 0.28);
     --spreadsheet-highlight-background: rgba(59, 130, 246, 0.16);
     --spreadsheet-highlight-outline: #3b82f6;
+
+    /* The "GC" in the MikeGC wordmark: the deepest blue of the mark and the
+       assistant icon (5.1:1 on the app surface). */
+    --brand-accent-text: #2563eb;
 }
 
 .dark {
@@ -88,6 +92,10 @@
     --spreadsheet-header-selected: rgba(71, 85, 105, 0.58);
     --spreadsheet-highlight-background: rgba(96, 165, 250, 0.24);
     --spreadsheet-highlight-outline: #60a5fa;
+
+    /* The assistant icon's lightest blue, which keeps its contrast on dark
+       surfaces. */
+    --brand-accent-text: #7ab8ff;
 }
 
 .document-tab-bar {

@@ -15,8 +15,11 @@ type IconPalette = {
     innerOpacities: [number, number, number, number];
 };
 
+// The MikeGC blue mark, in the assistant icon's blues. The same fill is
+// inlined in frontend/src/app/icon.svg and desktop/assets/icon.html; change
+// all three together.
 const DEFAULT_PALETTE: IconPalette = {
-    fillStops: ["#0a0a0a", "#151515", "#080808", "#111111"],
+    fillStops: ["#4f92f7", "#7ab8ff", "#2563eb", "#3b82f6"],
     fillOpacities: [0.9, 0.8, 0.85, 0.9],
     specularStops: [0.5, 0.2, 0, 0],
     borderStops: ["#ffffff", "#666666", "#ffffff"],

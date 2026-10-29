@@ -1,6 +1,6 @@
 {
-  "appId": "com.openlegalproducts.mike",
-  "productName": "Mike",
+  "appId": "com.openlegalproducts.mikegc",
+  "productName": "MikeGC",
   "directories": {
     "output": "dist"
   },

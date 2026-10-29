@@ -5,7 +5,7 @@ const { createHash } = require("node:crypto");
 function verifiedAsset(bytes, asset) {
   if (bytes.length !== asset.size_bytes ||
       createHash("sha256").update(bytes).digest("hex") !== asset.content_hash) {
-    throw new Error("A bundled workflow asset failed its integrity check. Reinstall Mike.");
+    throw new Error("A bundled workflow asset failed its integrity check. Reinstall MikeGC.");
   }
 }
 
@@ -42,11 +42,11 @@ async function installBundledWorkflows({ client, backendDir, storageRoot }) {
   try {
     document = JSON.parse(await fs.readFile(path.join(directory, "catalog.json"), "utf8"));
   } catch {
-    throw new Error("The offline workflow catalog is missing. Rebuild or reinstall Mike.");
+    throw new Error("The offline workflow catalog is missing. Rebuild or reinstall MikeGC.");
   }
   if (document.format_version !== 1 || !/^[0-9a-f]{40}$/.test(document.source_commit) ||
       !Array.isArray(document.workflows) || !document.workflows.length) {
-    throw new Error("The bundled workflow catalog is invalid. Reinstall Mike.");
+    throw new Error("The bundled workflow catalog is invalid. Reinstall MikeGC.");
   }
   const installed = await client.query(
     "select count(*)::int as count from public.mike_workflows where active and source_commit = $1",
@@ -57,13 +57,13 @@ async function installBundledWorkflows({ client, backendDir, storageRoot }) {
   const workflows = [];
   for (const workflow of document.workflows) {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(workflow.workflow_key) || !Array.isArray(workflow.assets)) {
-      throw new Error("The bundled workflow entry is invalid. Reinstall Mike.");
+      throw new Error("The bundled workflow entry is invalid. Reinstall MikeGC.");
     }
     const assets = [];
     for (const asset of workflow.assets) {
       if (!/^[0-9a-f]{64}$/.test(asset.content_hash) || typeof asset.filename !== "string" ||
           !asset.filename || asset.filename.startsWith(".") || /[/\\\0]/.test(asset.filename)) {
-        throw new Error("The bundled workflow asset path is invalid. Reinstall Mike.");
+        throw new Error("The bundled workflow asset path is invalid. Reinstall MikeGC.");
       }
       const bytes = await fs.readFile(path.join(directory, "assets", asset.content_hash));
       verifiedAsset(bytes, asset);

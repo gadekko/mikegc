@@ -30,10 +30,10 @@ export function packagedAppBinary(desktopDir) {
     desktopDir,
     "dist",
     MAC_DIST_DIR,
-    "Mike.app",
+    "MikeGC.app",
     "Contents",
     "MacOS",
-    "Mike",
+    "MikeGC",
   );
 }
 

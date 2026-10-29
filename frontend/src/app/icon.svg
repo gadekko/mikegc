@@ -16,10 +16,10 @@
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0.2" />
     </linearGradient>
     <linearGradient id="glassFill" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#0a0a0a" stop-opacity="0.9" />
-      <stop offset="30%"  stop-color="#151515" stop-opacity="0.8" />
-      <stop offset="70%"  stop-color="#080808" stop-opacity="0.85" />
-      <stop offset="100%" stop-color="#111111" stop-opacity="0.9" />
+      <stop offset="0%"   stop-color="#4f92f7" stop-opacity="0.9" />
+      <stop offset="30%"  stop-color="#7ab8ff" stop-opacity="0.8" />
+      <stop offset="70%"  stop-color="#2563eb" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.9" />
     </linearGradient>
     <linearGradient id="innerLight" x1="100%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%"   stop-color="#ffffff" stop-opacity="0" />
