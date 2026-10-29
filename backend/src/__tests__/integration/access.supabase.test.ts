@@ -133,4 +133,44 @@ maybeDescribe("Supabase access integration", () => {
             if (ownerId) await admin.auth.admin.deleteUser(ownerId);
         }
     });
+
+    // Auth deletes the row as supabase_auth_admin; the cascade into owned work
+    // must still clear private-content grants.
+    it("deletes an account through Auth when the user owns work", async () => {
+        const admin = createClient(url!, serviceKey!, {
+            auth: { persistSession: false },
+        });
+        const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const created = await admin.auth.admin.createUser({
+            email: `departing-${suffix}@example.com`,
+            password: "StackTest1!",
+            email_confirm: true,
+        });
+        if (created.error || !created.data.user) {
+            throw created.error ?? new Error("Could not create user");
+        }
+        const userId = created.data.user.id;
+        const projectId = crypto.randomUUID();
+        let deleted = false;
+        try {
+            expect(
+                (
+                    await admin.from("projects").insert({
+                        id: projectId,
+                        user_id: userId,
+                        name: `owned-${suffix}`,
+                    })
+                ).error,
+            ).toBeNull();
+            expect(
+                (await admin.from("chats").insert({ user_id: userId })).error,
+            ).toBeNull();
+
+            expect((await admin.auth.admin.deleteUser(userId)).error).toBeNull();
+            deleted = true;
+        } finally {
+            if (!deleted) await admin.auth.admin.deleteUser(userId);
+            await admin.from("projects").delete().eq("id", projectId);
+        }
+    });
 });

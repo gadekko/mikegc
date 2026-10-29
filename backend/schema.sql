@@ -9958,8 +9958,9 @@ drop trigger if exists revoke_org_private_content_on_membership_change on public
 create trigger revoke_org_private_content_on_membership_change before update on public.org_members
   for each row execute function public.revoke_org_private_content_on_membership_change();
 
+-- Runs as its owner: account deletion through Auth cascades into owned items.
 create or replace function public.clear_org_private_item_access()
-returns trigger language plpgsql set search_path=public,pg_temp as $$
+returns trigger language plpgsql security definer set search_path = pg_catalog, public, pg_temp as $$
 begin
   if tg_op='DELETE' or new.org_id is distinct from old.org_id or new.user_id is distinct from old.user_id or new.archived_at is distinct from old.archived_at then
     delete from public.org_private_content_access where kind=tg_argv[0] and item_id=old.id;
@@ -11467,5 +11468,6 @@ insert into public.schema_migrations (filename) values
   ('20261021_04_word_chat_message_playbook.sql'),
   ('20261026_00_org_departure_auth_role.sql'),
   ('20261026_01_intake_requests.sql'),
-  ('20261029_01_intake_on_by_default.sql')
+  ('20261029_01_intake_on_by_default.sql'),
+  ('20261030_01_private_access_cleanup_auth_role.sql')
 on conflict (filename) do nothing;
