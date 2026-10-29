@@ -112,7 +112,7 @@ An explicit `--server-url=<url>` CLI flag, or then `MIKE_SERVER_URL`, overrides
 local mode and saved settings. Otherwise `--local` or a saved local choice uses
 the bundled frontend; remote mode uses the saved server URL or
 `https://app.mikeoss.com`. A fresh self-contained installation shows the welcome
-chooser. Settings live in `~/Library/Application Support/Mike/settings.json`;
+chooser. Settings live in `~/Library/Application Support/MikeGC/settings.json`;
 tests use an isolated `MIKE_USER_DATA_DIR`.
 
 | Variable                    | Effect                                          |
@@ -125,8 +125,8 @@ tests use an isolated `MIKE_USER_DATA_DIR`.
 ## Package & test locally (no Apple account needed)
 
 ```bash
-npm run dist   # → dist/mac-arm64/Mike.app (unsigned)
-open dist/mac-arm64/Mike.app   # loads https://app.mikeoss.com
+npm run dist   # → dist/mac-arm64/MikeGC.app (unsigned)
+open dist/mac-arm64/MikeGC.app   # loads https://app.mikeoss.com
 ```
 
 **A locally-built app runs without any Gatekeeper prompt** — the "damaged / can't
@@ -139,7 +139,7 @@ docker-compose stack), use the connect screen (⌘⇧,) or launch with an
 override:
 
 ```bash
-open dist/mac-arm64/Mike.app --args --server-url=http://localhost:3100
+open dist/mac-arm64/MikeGC.app --args --server-url=http://localhost:3100
 # or, without packaging:
 npm start -- --server-url=http://localhost:3100
 ```
@@ -172,7 +172,7 @@ npm run start:local    # dev-mode launch straight into local mode
 MIKE_E2E_DEV=1 npm run e2e:local   # fresh-userData first-run e2e, dev mode
 
 npm run local:stage    # stage built app into local-stack/app for packaging
-npm run dist:local     # package Mike.app WITH the whole stack inside (unsigned)
+npm run dist:local     # package MikeGC.app WITH the whole stack inside (unsigned)
 npm run e2e:local      # same first-run e2e against the PACKAGED app
 ```
 
@@ -250,9 +250,9 @@ Notarization typically takes a few minutes; electron-builder blocks until Apple
 returns the ticket. Verify the result:
 
 ```bash
-codesign --verify --deep --strict --verbose=2 "dist/mac-arm64/Mike.app"
-xcrun stapler validate                          "dist/mac-arm64/Mike.app"
-spctl -a -vvv -t install                        "dist/mac-arm64/Mike.app"
+codesign --verify --deep --strict --verbose=2 "dist/mac-arm64/MikeGC.app"
+xcrun stapler validate                          "dist/mac-arm64/MikeGC.app"
+spctl -a -vvv -t install                        "dist/mac-arm64/MikeGC.app"
 # the spctl line should print: source=Notarized Developer ID
 ```
 
@@ -308,10 +308,10 @@ Verify the result the same way as the shell build, plus spot-check a nested
 binary and run the packaged first-run e2e against the signed app:
 
 ```bash
-codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Mike.app
-codesign -dv dist/mac-arm64/Mike.app/Contents/Resources/local-stack/bin/pg/bin/postgres
-xcrun stapler validate dist/mac-arm64/Mike.app
-spctl -a -vvv -t install dist/mac-arm64/Mike.app   # → Notarized Developer ID
+codesign --verify --deep --strict --verbose=2 dist/mac-arm64/MikeGC.app
+codesign -dv dist/mac-arm64/MikeGC.app/Contents/Resources/local-stack/bin/pg/bin/postgres
+xcrun stapler validate dist/mac-arm64/MikeGC.app
+spctl -a -vvv -t install dist/mac-arm64/MikeGC.app   # → Notarized Developer ID
 npm run e2e:local                                   # full boot inside the signed app
 ```
 
@@ -333,7 +333,7 @@ Two constraints worth knowing before touching anything here:
 Distributing the unsigned `.dmg` still works, it's just rougher for the
 downloader: the app opens as **System Settings → Privacy & Security → "Open
 Anyway"**, or from Terminal with
-`xattr -dr com.apple.quarantine /Applications/Mike.app`. (macOS 15 Sequoia
+`xattr -dr com.apple.quarantine /Applications/MikeGC.app`. (macOS 15 Sequoia
 removed the old Control-click → Open shortcut, so it's the Settings pane or the
 `xattr` command now.) Nothing about the app is degraded — signing is purely the
 download-trust gate.
@@ -341,7 +341,7 @@ download-trust gate.
 ## Icon
 
 The dock icon is the product's own 12-blade glass asterisk
-(`frontend/src/app/components/chat/mike-icon.tsx`) on a macOS Big-Sur-style
+(`frontend/src/shared/ui/MikeIconUI.tsx`) on a macOS Big-Sur-style
 plate. `assets/icon.html` is the source of truth; regenerate with:
 
 ```bash
@@ -388,7 +388,7 @@ With the docker-compose stack running and the app packaged:
 npm run e2e
 ```
 
-Launches the **packaged** `Mike.app` (not `electron .`, so packaging
+Launches the **packaged** `MikeGC.app` (not `electron .`, so packaging
 regressions fail too) with a CDP port, drives it with Playwright: asserts the
 shell connects and routes an anonymous user to `/login`, signs up a fresh
 user through the real UI (local stack autoconfirms), creates a project via

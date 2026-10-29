@@ -14,7 +14,7 @@
 #              migration or schema.sql change re-runs it.
 #
 #   packaged   the whole pipeline a release would run — fetch binaries,
-#              build backend + standalone frontend, stage, package Mike.app
+#              build backend + standalone frontend, stage, package MikeGC.app
 #              (unsigned) — then e2e/local.e2e.mjs drives the PACKAGED app:
 #              cold first run (initdb → signup → project → upload →
 #              blob-token download → guest ×2), quit, and the returning-user
@@ -151,7 +151,7 @@ jobs:
         env:
           MIKE_WORKFLOWS_GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Stage the stack and package Mike.app (unsigned)
+      - name: Stage the stack and package MikeGC.app (unsigned)
         run: |
           npm run local:stage --prefix desktop
           npm run dist:local --prefix desktop

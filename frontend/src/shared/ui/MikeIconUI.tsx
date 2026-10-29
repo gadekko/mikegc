@@ -15,8 +15,10 @@ type IconPalette = {
     innerOpacities: [number, number, number, number];
 };
 
+// The MikeGC walnut mark. The same fill is inlined in frontend/src/app/icon.svg
+// and desktop/assets/icon.html; change all three together.
 const DEFAULT_PALETTE: IconPalette = {
-    fillStops: ["#0a0a0a", "#151515", "#080808", "#111111"],
+    fillStops: ["#3b2416", "#5c3a24", "#2e1b10", "#4a2e1c"],
     fillOpacities: [0.9, 0.8, 0.85, 0.9],
     specularStops: [0.5, 0.2, 0, 0],
     borderStops: ["#ffffff", "#666666", "#ffffff"],

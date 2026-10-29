@@ -839,6 +839,6 @@ if (!app.requestSingleInstanceLock()) {
 process.on("uncaughtException", (err) => {
   console.error("[mike-desktop] uncaught", err);
   if (app.isReady() && win === null) {
-    dialog.showErrorBox("Mike", String(err?.message ?? err));
+    dialog.showErrorBox("MikeGC", String(err?.message ?? err));
   }
 });

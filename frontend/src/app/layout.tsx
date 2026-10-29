@@ -6,9 +6,9 @@ import { Providers } from "@/app/components/providers";
 
 export const metadata: Metadata = {
     metadataBase: new URL("https://app.mikeoss.com"),
-    title: "Mike - Legal AI Platform",
+    title: "MikeGC - Legal AI for In-house Teams",
     description:
-        "AI-powered legal document analysis and contract review platform.",
+        "AI-powered document review, drafting, and contract playbooks for in-house legal teams.",
     icons: {
         icon: [
             { url: "/icon.svg", type: "image/svg+xml" },
@@ -19,24 +19,24 @@ export const metadata: Metadata = {
     openGraph: {
         type: "website",
         url: "https://app.mikeoss.com",
-        siteName: "Mike",
-        title: "Mike - Legal AI Platform",
+        siteName: "MikeGC",
+        title: "MikeGC - Legal AI for In-house Teams",
         description:
-            "AI-powered legal document analysis and contract review platform.",
+            "AI-powered document review, drafting, and contract playbooks for in-house legal teams.",
         images: [
             {
                 url: "/link-image.jpg",
                 width: 1200,
                 height: 651,
-                alt: "Mike",
+                alt: "MikeGC",
             },
         ],
     },
     twitter: {
         card: "summary_large_image",
-        title: "Mike - Legal AI Platform",
+        title: "MikeGC - Legal AI for In-house Teams",
         description:
-            "AI-powered legal document analysis and contract review platform.",
+            "AI-powered document review, drafting, and contract playbooks for in-house legal teams.",
         images: ["/link-image.jpg"],
     },
 };
