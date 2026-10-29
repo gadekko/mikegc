@@ -46,6 +46,9 @@
     --spreadsheet-header-selected: rgba(156, 163, 175, 0.28);
     --spreadsheet-highlight-background: rgba(59, 130, 246, 0.16);
     --spreadsheet-highlight-outline: #3b82f6;
+
+    /* The "GC" in the MikeGC wordmark: the walnut of the mark's fill. */
+    --brand-accent-text: #5c3a24;
 }
 
 .dark {
@@ -88,6 +91,9 @@
     --spreadsheet-header-selected: rgba(71, 85, 105, 0.58);
     --spreadsheet-highlight-background: rgba(96, 165, 250, 0.24);
     --spreadsheet-highlight-outline: #60a5fa;
+
+    /* A lighter walnut that keeps its contrast on dark surfaces. */
+    --brand-accent-text: #c9a27e;
 }
 
 .document-tab-bar {

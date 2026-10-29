@@ -22,7 +22,7 @@ export function WordAddinLogo({
           large ? "text-4xl" : "text-2xl"
         )}
       >
-        MikeGC
+        Mike<span className="text-(--brand-accent-text)">GC</span>
       </span>
     </div>
   );
