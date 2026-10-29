@@ -1,15 +1,18 @@
-# Legal requests
+# Intake
 
-Legal requests gives a team one shared queue for text-only NDA requests and
-legal questions. An owner enables it in **Organization settings → Legal
-requests** and chooses the Legal team. Every existing organization starts with
-intake disabled. Personal workspaces do not have an intake queue.
+Intake gives a team one shared queue for text-only NDA requests and legal
+questions. It is on by default in every organization; an owner can switch it
+off in **Organization settings → Features**. Requests can be sent once an owner
+chooses the Legal team from **Intake → Intake settings**, which starts with
+everyone in the organization selected. Personal workspaces do not have an
+intake queue.
 
 ## Working with a request
 
-1. A team member opens **Legal requests → New request**, selects the type, and
-   enters the subject and question. A business target date is optional and must
-   include a confirmed timezone. It is not a verified legal deadline.
+1. A team member opens **Intake** and selects **New request**, which opens a
+   dialog. They choose the type and enter the subject and question. A target
+   date is optional and must include a confirmed timezone. It is not a verified
+   legal deadline.
 2. Legal opens the **Legal queue** and assigns the request to a current Legal
    team member. Search, status and assigned-lawyer filters narrow the queue.
 3. The assigned lawyer can ask for information. The requester replies in the
@@ -38,10 +41,11 @@ notes, email delivery, scheduled processing or automatic legal decisions.
 - This shared queue is unsuitable for matters that need separate access
   restrictions between Legal team members.
 - Removing a reviewer ends their queue access and clears unresolved assignments.
-  Removing the last reviewer pauses intake. Rejoining the organization does not
-  restore Legal membership automatically.
-- Pausing intake stops new submissions and changes. Existing authorized records
-  remain readable. An owner can select replacement reviewers and resume it.
+  Removing the last reviewer stops new requests until an owner chooses a new
+  Legal team. Rejoining the organization does not restore Legal membership
+  automatically.
+- Switching intake off stops new submissions and changes. Existing authorized
+  records remain readable. An owner can switch it back on in Features.
 - Requests belong to the organization and remain when a member leaves. Account
   deletion clears identity references and command receipts involving the account
   in the same transaction that deletes the Auth identity. A storage cleanup
@@ -105,12 +109,13 @@ Use the existing migration runner documented in [deployment.md](deployment.md).
 Do not replay historical migrations over a fresh schema. Fresh installations use
 `backend/schema.sql`, including both migrations in its ledger.
 
-Test with a synthetic organization first. Enabling a real pilot is an explicit
-owner action. There is no new worker kind or scheduler. Account exports and
+Test with a synthetic organization first. Intake is on by default, but no
+request can be sent until an owner chooses a Legal team, so a real pilot still
+starts with an explicit owner action. There is no new worker kind or scheduler. Account exports and
 account deletion use the existing durable workers.
 
-To pause, disable intake. To roll back application code, keep the additive schema
-and stored records. An older binary cannot expose intake export/purge controls;
+To pause, switch intake off in Features. To roll back application code, keep
+the additive schema and stored records. An older binary cannot expose intake export/purge controls;
 retain a compatible administrative build for those operations. Database triggers
 continue to revoke reviewer access and detach deleted accounts even if the old
 application does not know about intake. Do not drop the tables as rollback.

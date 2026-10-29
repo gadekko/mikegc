@@ -18,7 +18,7 @@ export async function intakeRpc<T>(
     // PostgreSQL guarantees these transactions aborted. Reuse the exact command.
     if (["40P01", "40001"].includes(error.code) && attempt < 2) continue;
     if (error.code === "P0002")
-      return failure("not_found", "Legal request not found.");
+      return failure("not_found", "Request not found.");
     if (error.code === "42501")
       return failure("forbidden", "You don't have permission for this action.");
     if (error.code === "P0004")
@@ -38,6 +38,12 @@ export async function intakeRpc<T>(
         "conflict",
         "Intake is paused. Existing requests are read-only.",
         "intake_paused",
+      );
+    if (error.code === "P0005")
+      return failure(
+        "conflict",
+        "Intake has no Legal team yet. An owner can choose one in Intake settings.",
+        "intake_no_team",
       );
     if (["22023", "23514", "22P02", "22007", "22008"].includes(error.code))
       return failure(

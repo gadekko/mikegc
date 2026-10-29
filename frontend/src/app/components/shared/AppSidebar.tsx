@@ -54,6 +54,7 @@ import {
     WorkflowSkeuoIcon,
     PlaybookSkeuoIcon,
     OrganizationSkeuoIcon,
+    IntakeSkeuoIcon,
     SettingsSkeuoIcon,
     SignOutSkeuoIcon,
 } from "@/app/components/shared/AppSidebarSkeuoIcons";
@@ -582,7 +583,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                 <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
                     {/* Nav items */}
                     <div className="pt-1.5">
-                        {[...NAV_ITEMS, ...(showIntake ? [{ href: "/intake", label: "Legal requests", icon: OrganizationSkeuoIcon }] : [])].map(({ href, label, icon: Icon }) => {
+                        {[...NAV_ITEMS, ...(showIntake ? [{ href: "/intake", label: "Intake", icon: IntakeSkeuoIcon }] : [])].map(({ href, label, icon: Icon }) => {
                             const isActive =
                                 href === "/assistant"
                                     ? pathname === href

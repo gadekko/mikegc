@@ -29,8 +29,8 @@ export function useIntakeOperation(
       onRejected?.(outcome.error);
       notifyError(outcome.error, {
         action: view.uncertain
-          ? "confirm whether the legal request was saved"
-          : "save the legal request",
+          ? "confirm whether the request was saved"
+          : "save the request",
       });
     }
   }, [view, snapshot.outcome, onSaved, onRejected]);
@@ -164,5 +164,5 @@ export function useIntakeDraftWarning(dirty: boolean) {
 }
 /** Describe an intake load failure without exposing raw service errors. */
 export function intakeError(error: unknown) {
-  return describeError(error, { action: "load legal requests" }).message;
+  return describeError(error, { action: "load intake requests" }).message;
 }

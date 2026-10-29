@@ -22,8 +22,8 @@ Included now:
   structured rules and review contracts against them. See
   [Playbooks](docs/playbooks.md).
 
-- **Legal requests**: opt-in text-only intake, a shared Legal queue, clarification
-  and reviewed answers. See [Legal requests](docs/intake.md).
+- **Intake**: opt-in text-only requests, a shared Legal queue, clarification
+  and reviewed answers. See [Intake](docs/intake.md).
 
 Planned, starting with:
 

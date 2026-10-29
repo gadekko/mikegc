@@ -70,6 +70,12 @@ describe.skipIf(!container)("intake real PostgreSQL transactions", () => {
     );
     sql(migration);
     sql(migration);
+    const onByDefault = readFileSync(
+      resolve("migrations/20261029_01_intake_on_by_default.sql"),
+      "utf8",
+    );
+    sql(onByDefault);
+    sql(onByDefault);
   }, 60000);
   afterAll(() => {
     execFileSync("docker", [
@@ -210,7 +216,7 @@ describe.skipIf(!container)("intake real PostgreSQL transactions", () => {
       json(cmd("publish", 3, 102, 2, ",'Never committed'")).applied_version,
     ).toBe(3);
   });
-  it("unassigns departing reviewers and pauses after the last reviewer leaves", () => {
+  it("unassigns departing reviewers and closes intake to new requests after the last reviewer leaves", () => {
     sql(submit());
     sql(cmd("assign", 3, 101, 1, `,${q(3)}`));
     sql(`select public.remove_org_member(${q(10)},${q(3)},${q(1)});`);
@@ -219,16 +225,37 @@ describe.skipIf(!container)("intake real PostgreSQL transactions", () => {
     );
     expect(() => sql(cmd("assign", 3, 101, 1, `,${q(3)}`))).toThrow();
     sql(`select public.remove_org_member(${q(10)},${q(4)},${q(1)});`);
-    expect(sql("select enabled from public.intake_settings")).toBe("f");
+    expect(sql("select enabled from public.intake_settings")).toBe("t");
     expect(
       json(`select public.intake_get_request(${q(10)},${q(2)},${q(20)});`)
         .subject,
     ).toBe("Supplier NDA");
-    expect(() => sql(cmd("cancel", 2, 110, 3))).toThrow();
+    expect(() => sql(submit(111))).toThrow(/no Legal team yet/);
     sql(
       `insert into public.org_members(org_id,user_id) values(${q(10)},${q(3)});`,
     );
     expect(sql(`select public.intake_is_reviewer(${q(10)},${q(3)})`)).toBe("f");
+  });
+  it("treats an organization without settings as on but closed until it has a Legal team", () => {
+    const configuration = () =>
+      json(`select public.intake_configuration(${q(11)},${q(6)});`);
+    const submitOther = (command: number) =>
+      `select public.intake_submit_request(${q(11)},${q(6)},${q(command)},${q(31)},'general','Question','Please help');`;
+    expect(configuration()).toMatchObject({
+      configured: false,
+      enabled: true,
+      has_team: false,
+    });
+    expect(() => sql(submitOther(130))).toThrow(/no Legal team yet/);
+    sql(
+      `select public.intake_configure(${q(11)},${q(6)},${q(131)},0,true,'{}'::uuid[]);`,
+    );
+    expect(configuration()).toMatchObject({ enabled: true, has_team: false });
+    sql(
+      `select public.intake_configure(${q(11)},${q(6)},${q(132)},1,true,array[${q(6)}]::uuid[]);`,
+    );
+    expect(configuration()).toMatchObject({ enabled: true, has_team: true });
+    expect(json(submitOther(133)).request_id).toBe(uid(31));
   });
   it("retains business records on requester departure and erases identity on account deletion", () => {
     sql(submit());

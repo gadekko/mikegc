@@ -713,6 +713,8 @@ export type IntakeState = "submitted" | "in_review" | "needs_information" | "res
 export type IntakeAction = "assignment" | "questions" | "replies" | "answer" | "cancel";
 export interface IntakeConfiguration {
   configured: boolean; enabled: boolean; can_configure: boolean; is_reviewer: boolean;
+  /** False until an owner chooses the Legal team; requests cannot be sent before then. */
+  has_team: boolean;
   revision?: number; reviewer_ids?: string[];
 }
 export interface IntakeReviewer { user_id: string; display_name: string | null; email: string | null; is_reviewer: boolean }

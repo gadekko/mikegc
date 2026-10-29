@@ -91,56 +91,61 @@ test("owner configures intake, Legal clarifies and shares an exact answer once",
           { id: p.id, org },
         );
     const [owner, requester, lawyer] = people.map((p) => p.page);
+    const emailPattern = (email: string) =>
+      new RegExp(email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     await owner.goto("/intake");
-    await owner.getByRole("link", { name: "Intake settings" }).click();
-    await owner.getByRole("checkbox", { name: "Enable intake" }).check();
+    // Intake is on by default; requests wait until an owner picks the team.
+    await expect(
+      owner.getByRole("button", { name: "New request" }),
+    ).toBeDisabled();
     await owner
-      .getByRole("checkbox", {
-        name: new RegExp(
-          people[2].email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        ),
-      })
-      .check();
-    await owner.goBack();
-    await expect(owner).toHaveURL(/\/intake$/);
-    await owner.goForward();
+      .getByRole("button", { name: "Intake settings", exact: true })
+      .click();
+    // The Legal team starts as everyone; keep only the lawyer.
+    for (const person of people.slice(0, 2))
+      await owner
+        .getByRole("checkbox", { name: emailPattern(person.email) })
+        .uncheck();
     await expect(
-      owner.getByRole("checkbox", { name: "Enable intake" }),
+      owner.getByRole("checkbox", { name: emailPattern(people[2].email) }),
     ).toBeChecked();
-    await owner.getByRole("button", { name: "Save intake settings" }).click();
+    await owner.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
-      owner.getByRole("button", { name: "Save intake settings" }),
+      owner.getByRole("button", { name: "New request" }),
     ).toBeEnabled();
     await requester.goto("/assistant");
     await requester
-      .getByRole("button", { name: "Legal requests", exact: true })
+      .getByRole("button", { name: "Intake", exact: true })
       .click();
     await expect(
       requester.getByRole("button", { name: "New request" }),
     ).toBeEnabled();
     await requester.getByRole("button", { name: "New request" }).focus();
     await requester.keyboard.press("Enter");
-    await expect(requester.getByLabel("Request type")).toBeVisible();
-    await requester.getByLabel("Request type").selectOption("nda");
+    const requestType = requester.getByRole("group", { name: "Request type" });
+    await expect(requestType).toBeVisible();
+    await requestType.getByRole("button", { name: "NDA request" }).click();
     await requester
       .getByLabel("Subject", { exact: true })
       .fill("Synthetic supplier NDA");
     await requester
       .getByLabel("What do you need help with?")
       .fill("Please check the supplier's confidentiality terms.");
-    await requester.getByLabel(/Business target date/).fill("2026-11-10");
-    await requester.getByLabel("Confirm timezone").fill("Europe/Stockholm");
+    await requester.getByLabel("Target date (optional)").fill("2026-11-10");
+    await requester.getByLabel("Timezone").fill("Europe/Stockholm");
     await requester.goBack();
     await expect(requester).toHaveURL(/\/assistant/);
     await requester.goForward();
     await expect(requester.getByLabel("Subject", { exact: true })).toHaveValue(
       "Synthetic supplier NDA",
     );
-    await expect(requester.getByLabel("Request type")).toHaveValue("nda");
-    await expect(requester.getByLabel(/Business target date/)).toHaveValue(
+    await expect(
+      requestType.getByRole("button", { name: "NDA request" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(requester.getByLabel("Target date (optional)")).toHaveValue(
       "2026-11-10",
     );
-    await expect(requester.getByLabel("Confirm timezone")).toHaveValue(
+    await expect(requester.getByLabel("Timezone")).toHaveValue(
       "Europe/Stockholm",
     );
     const submissions: unknown[] = [];

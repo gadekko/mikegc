@@ -1,0 +1,37 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tray" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBBF24"/>
+      <stop offset="0.55" stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#B45309"/>
+    </linearGradient>
+    <linearGradient id="well" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#78350F"/>
+      <stop offset="1" stop-color="#92400E"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#ECEEF1"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7AB8FF"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.75"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#451A03" stop-opacity="0.45"/>
+    </linearGradient>
+    <radialGradient id="sheen">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M10 36 L14 30 H50 L54 36 Z" fill="url(#well)"/>
+  <rect x="17" y="6" width="30" height="34" rx="3.5" fill="url(#paper)" stroke="#D1D5DB" stroke-width="1"/>
+  <path d="M23 15 H41 M23 21 H38 M23 27 H40" stroke="#B6BCC6" stroke-width="3" stroke-linecap="round"/>
+  <path d="M6 36 H20.5 C21.6 36 22.5 36.7 22.9 37.7 L24 40.5 C24.4 41.4 25.3 42 26.3 42 H37.7 C38.7 42 39.6 41.4 40 40.5 L41.1 37.7 C41.5 36.7 42.4 36 43.5 36 H58 V52 C58 56.4 54.4 60 50 60 H14 C9.6 60 6 56.4 6 52 Z" fill="url(#tray)" stroke="url(#rim)" stroke-width="1.5"/>
+  <ellipse cx="18" cy="45" rx="9" ry="3" fill="url(#sheen)" opacity="0.3"/>
+  <circle cx="49" cy="15" r="8" fill="url(#arrow)" stroke="#FFFFFF" stroke-width="1.5"/>
+  <path d="M49 10.5 V19 M45.5 15.8 L49 19.3 L52.5 15.8" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

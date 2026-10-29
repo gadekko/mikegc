@@ -14,7 +14,7 @@ export function useIntakeNavigation(accountId: string | null, orgId?: string) {
     const refresh = () => {
       void getIntakeConfiguration(orgId)
         .then((c) => {
-          if (active) setLoaded({ key, visible: c.configured });
+          if (active) setLoaded({ key, visible: c.enabled });
         })
         .catch(() => {
           // Navigation is optional discovery. The settings page reports load errors.

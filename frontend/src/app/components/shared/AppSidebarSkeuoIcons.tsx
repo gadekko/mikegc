@@ -12,6 +12,7 @@ import workflow from "../../../../public/icons/features/workflow.svg";
 import playbook from "../../../../public/icons/features/playbook.svg";
 import connector from "../../../../public/icons/features/connector.svg";
 import organization from "../../../../public/icons/features/organization.svg";
+import intake from "../../../../public/icons/features/intake.svg";
 import settings from "../../../../public/icons/settings.svg";
 import signOut from "../../../../public/icons/sign-out.svg";
 
@@ -29,6 +30,7 @@ const icons = {
   "features/playbook": playbook,
   "features/connector": connector,
   "features/organization": organization,
+  "features/intake": intake,
   settings,
   "sign-out": signOut,
 };
@@ -37,7 +39,7 @@ const icons = {
 export function preloadSidebarIcons() {
   for (const src of [
     chat, chatComplete, ide, project, library, tabularReview, tabularReviewComplete, workflow,
-    playbook, settings, organization, signOut,
+    playbook, settings, organization, intake, signOut,
   ]) {
     const { props } = getImageProps({
       src, alt: "", width: 64, height: 64, unoptimized: true,
@@ -103,6 +105,10 @@ export function ConnectorSkeuoIcon(props: IconProps) {
 
 export function OrganizationSkeuoIcon(props: IconProps) {
   return <AppSidebarIcon name="features/organization" {...props} />;
+}
+
+export function IntakeSkeuoIcon(props: IconProps) {
+  return <AppSidebarIcon name="features/intake" {...props} />;
 }
 
 export function SettingsSkeuoIcon(props: IconProps) {

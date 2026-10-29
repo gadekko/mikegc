@@ -10828,7 +10828,7 @@ select public.backfill_document_text(100,false);
 -- Opt-in, organization-owned legal requests. All entry points are server-only.
 create table if not exists public.intake_settings (
   org_id uuid primary key references public.organizations(id) on delete cascade,
-  enabled boolean not null default false,
+  enabled boolean not null default true,
   revision integer not null default 0 check (revision >= 0),
   updated_at timestamptz not null default now()
 );
@@ -10994,8 +10994,8 @@ begin
     insert into public.intake_events(org_id,request_id,kind,from_state,to_state)
       values(old.org_id,r.id,'reviewer_removed',r.state,case when r.state='in_review' then 'submitted' else r.state end);
   end loop;
-  update public.intake_settings set revision=revision+1,updated_at=now(),
-    enabled=enabled and exists(select 1 from public.intake_reviewers where org_id=old.org_id)
+  -- Losing the last reviewer leaves intake on; submissions wait for a new team.
+  update public.intake_settings set revision=revision+1,updated_at=now()
     where org_id=old.org_id;
   insert into public.intake_events(org_id,kind) select old.org_id,'roster_changed'
     where exists(select 1 from public.intake_settings where org_id=old.org_id);
@@ -11016,8 +11016,8 @@ begin
   replay:=public.intake_replay(p_org,p_actor,p_command,'configure',input);
   if replay is not null then return replay; end if;
   if p_enabled is null or p_revision is null or p_reviewers is null or cardinality(reviewers)>500
-    or (p_enabled and cardinality(reviewers)=0) or exists(select 1 from unnest(reviewers) x where public.intake_member_role(p_org,x) is null)
-    then raise exception 'Choose current Legal team members before enabling intake' using errcode='22023'; end if;
+    or exists(select 1 from unnest(reviewers) x where public.intake_member_role(p_org,x) is null)
+    then raise exception 'Choose current organization members for the Legal team' using errcode='22023'; end if;
   insert into public.intake_settings(org_id) values(p_org) on conflict do nothing;
   select revision into v from public.intake_settings where org_id=p_org;
   if v<>p_revision then raise exception 'Intake configuration changed; reload it' using errcode='P0001'; end if;
@@ -11040,7 +11040,9 @@ begin
     if not public.intake_can_read(p_org,p_actor,p_request) then raise exception 'Request not found' using errcode='P0002'; end if;
     return replay;
   end if;
-  if not coalesce((select enabled from public.intake_settings where org_id=p_org),false) then raise exception 'Intake is paused' using errcode='P0003'; end if;
+  -- Intake is on unless an owner switched it off, but needs a Legal team.
+  if not coalesce((select enabled from public.intake_settings where org_id=p_org),true) then raise exception 'Intake is paused' using errcode='P0003'; end if;
+  if not exists(select 1 from public.intake_reviewers where org_id=p_org) then raise exception 'Intake has no Legal team yet' using errcode='P0005'; end if;
   if p_request is null or p_category is null or p_subject is null or p_description is null
     or p_category not in ('nda','general') or char_length(p_subject) not between 1 and 200 or btrim(p_subject)=''
     or char_length(p_description) not between 1 and 20000 or btrim(p_description)=''
@@ -11128,7 +11130,8 @@ begin
   role:=public.intake_member_role(p_org,p_actor);
   if role is null then raise exception 'Intake not found' using errcode='P0002'; end if;
   select * into s from public.intake_settings where org_id=p_org;
-  return jsonb_build_object('configured',s.org_id is not null,'enabled',coalesce(s.enabled,false),
+  return jsonb_build_object('configured',s.org_id is not null,'enabled',coalesce(s.enabled,true),
+    'has_team',exists(select 1 from public.intake_reviewers where org_id=p_org),
     'can_configure',role='owner','is_reviewer',public.intake_is_reviewer(p_org,p_actor)) ||
     case when role='owner' then jsonb_build_object('revision',coalesce(s.revision,0),'reviewer_ids',
       (select coalesce(jsonb_agg(user_id order by user_id),'[]') from public.intake_reviewers where org_id=p_org)) else '{}'::jsonb end;
@@ -11463,5 +11466,6 @@ insert into public.schema_migrations (filename) values
   ('20261021_03_user_response_details.sql'),
   ('20261021_04_word_chat_message_playbook.sql'),
   ('20261026_00_org_departure_auth_role.sql'),
-  ('20261026_01_intake_requests.sql')
+  ('20261026_01_intake_requests.sql'),
+  ('20261029_01_intake_on_by_default.sql')
 on conflict (filename) do nothing;

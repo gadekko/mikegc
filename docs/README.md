@@ -12,7 +12,7 @@
 
 ## Features and clients
 
-- [Legal requests](intake.md): intake setup, access, retention and verification
+- [Intake](intake.md): intake setup, access, retention and verification
 
 - [Organization offboarding](organization-offboarding.md) — member removal,
   account deletion, shared-work transfer and owner-only recovery

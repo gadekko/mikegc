@@ -171,6 +171,7 @@ export const CODE_KINDS: Readonly<Record<string, UserErrorKind>> = {
     intake_conflict: "conflict",
     intake_purged: "conflict",
     intake_paused: "conflict",
+    intake_no_team: "conflict",
     // Throttling
     rate_limited: "rate_limited",
     upload_session_control_rate_limit: "rate_limited",

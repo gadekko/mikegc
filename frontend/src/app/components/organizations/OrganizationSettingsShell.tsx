@@ -78,7 +78,7 @@ export function organizationSettingsHref(
 }
 
 type OrganizationSettingsSection =
-  "general" | "members" | "audit" | "providers" | "privacy-data" | "intake";
+  "general" | "members" | "audit" | "providers" | "privacy-data" | "features";
 
 export function OrganizationSettingsProvider({
   orgId,
@@ -224,9 +224,9 @@ export function OrganizationSettingsFrame({
       ...(isOwner
         ? [
             {
-              id: "intake",
-              label: "Legal requests",
-              href: organizationSettingsHref(orgId, "intake"),
+              id: "features",
+              label: "Features",
+              href: organizationSettingsHref(orgId, "features"),
             },
             {
               id: "privacy-data",

@@ -4,13 +4,15 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import type { IntakeConfiguration, IntakeRequest } from "@mike/contracts";
 import { IntakeInbox, Inbox } from "./IntakeInbox";
 import { IntakeDetail, Detail } from "./IntakeDetail";
-import { Settings } from "./IntakeSettings";
+import { IntakeFeatureSetting, IntakeTeamModal } from "./IntakeSettings";
 import { setIntakeMemoryAccount } from "@/app/lib/intakeMemory";
 
 const mocks = vi.hoisted(() => ({
@@ -56,8 +58,39 @@ vi.mock("@/app/components/organizations/OrganizationSettingsShell", () => ({
   useOrganizationSettings: () => ({ orgId: "org-a", org: { role: "owner" } }),
 }));
 vi.mock("@/app/components/shared/PageHeader", () => ({
-  PageHeader: ({ children }: { children: ReactNode }) => (
-    <header>{children}</header>
+  PageHeader: ({
+    children,
+    actions = [],
+  }: {
+    children?: ReactNode;
+    actions?: (
+      | false
+      | null
+      | undefined
+      | {
+          type?: string;
+          title?: string;
+          label?: ReactNode;
+          disabled?: boolean;
+          onClick?: () => void;
+        }
+    )[];
+  }) => (
+    <header>
+      {children}
+      {actions.map((action, index) =>
+        !action || action.type === "search" ? null : (
+          <button
+            key={index}
+            type="button"
+            disabled={action.disabled}
+            onClick={action.onClick}
+          >
+            {action.type === "new" ? action.title : action.label}
+          </button>
+        ),
+      )}
+    </header>
   ),
 }));
 vi.mock("@/app/lib/userFacingError", () => ({
@@ -93,6 +126,7 @@ const configuration = (revision = 1): IntakeConfiguration => ({
   enabled: true,
   can_configure: true,
   is_reviewer: true,
+  has_team: true,
   revision,
   reviewer_ids: ["lawyer-a"],
 });
@@ -123,6 +157,8 @@ const request = (overrides: Partial<IntakeRequest> = {}): IntakeRequest => ({
   },
   ...overrides,
 });
+const EMPTY_INBOX =
+  "Ask the Legal team for help with an NDA or a legal question.";
 const receipt = {
   request_id: "request-a",
   applied_version: 2,
@@ -160,8 +196,19 @@ beforeEach(() => {
   mocks.command.mockResolvedValue(receipt);
   mocks.configure.mockResolvedValue({ ...receipt, request_id: null });
   vi.spyOn(window, "confirm").mockReturnValue(false);
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }),
+  );
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("configuration revisions and MFA", () => {
   it("keeps the loaded revision with a draft until an explicit conflict reload", async () => {
@@ -169,12 +216,12 @@ describe("configuration revisions and MFA", () => {
       .mockResolvedValueOnce(configuration(1))
       .mockResolvedValue(configuration(9));
     mocks.configure.mockRejectedValue({ status: 409, code: "intake_conflict" });
-    render(<Settings orgId="org-a" />);
+    render(<IntakeTeamModal orgId="org-a" onClose={() => {}} />);
     fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
     await act(async () => {});
     expect(mocks.configuration).toHaveBeenCalledTimes(1);
     fireEvent.click(
-      screen.getByRole("button", { name: "Save intake settings" }),
+      screen.getByRole("button", { name: "Save" }),
     );
     await screen.findByRole("button", { name: "Reload settings" });
     expect(mocks.configure.mock.calls[0][1]).toMatchObject({
@@ -183,7 +230,7 @@ describe("configuration revisions and MFA", () => {
     });
     expect(screen.getByRole("checkbox", { name: /Lawyer B/ })).toBeChecked();
     expect(
-      screen.getByRole("button", { name: "Save intake settings" }),
+      screen.getByRole("button", { name: "Save" }),
     ).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Reload settings" }));
     expect(mocks.configuration).toHaveBeenCalledTimes(1);
@@ -204,10 +251,10 @@ describe("configuration revisions and MFA", () => {
         status: 403,
         code: "mfa_verification_required",
       });
-    render(<Settings orgId="org-a" />);
+    render(<IntakeTeamModal orgId="org-a" onClose={() => {}} />);
     fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Save intake settings" }),
+      screen.getByRole("button", { name: "Save" }),
     );
     const verify = await screen.findByRole("button", { name: "Verify MFA" });
     const original = structuredClone(mocks.configure.mock.calls[0][1]);
@@ -226,15 +273,15 @@ describe("configuration revisions and MFA", () => {
       status: 403,
       code: "mfa_verification_required",
     });
-    render(<Settings orgId="org-a" />);
+    render(<IntakeTeamModal orgId="org-a" onClose={() => {}} />);
     fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Save intake settings" }),
+      screen.getByRole("button", { name: "Save" }),
     );
     const verify = await screen.findByRole("button", { name: "Verify MFA" });
     const original = structuredClone(mocks.configure.mock.calls[0][1]);
     expect(
-      screen.getByRole("button", { name: "Save intake settings" }),
+      screen.getByRole("button", { name: "Save" }),
     ).toBeDisabled();
     fireEvent.click(verify);
     await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(2));
@@ -249,15 +296,15 @@ describe("configuration revisions and MFA", () => {
     mocks.configuration
       .mockResolvedValueOnce(configuration())
       .mockReturnValue(new Promise(() => {}));
-    render(<Settings orgId="org-a" />);
+    render(<IntakeTeamModal orgId="org-a" onClose={() => {}} />);
     fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Save intake settings" }),
+      screen.getByRole("button", { name: "Save" }),
     );
     await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(2));
     expect(screen.queryByText("a@example.test")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Save intake settings" }),
+      screen.queryByRole("button", { name: "Save" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled();
     const original = structuredClone(mocks.configure.mock.calls[0]);
@@ -265,6 +312,75 @@ describe("configuration revisions and MFA", () => {
     await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(3));
     expect(mocks.configure.mock.calls[2]).toEqual(original);
     expect(screen.queryByText("a@example.test")).not.toBeInTheDocument();
+  });
+});
+
+describe("intake defaults and table actions", () => {
+  it("pre-selects the whole organization until a Legal team is saved", async () => {
+    mocks.configuration.mockResolvedValue({
+      ...configuration(),
+      has_team: false,
+      reviewer_ids: [],
+    });
+    render(<IntakeTeamModal orgId="org-a" onClose={() => {}} />);
+    expect(
+      await screen.findByRole("checkbox", { name: /Lawyer A/ }),
+    ).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Lawyer B/ })).toBeChecked();
+  });
+
+  it("switches intake off without changing the saved Legal team", async () => {
+    render(<IntakeFeatureSetting orgId="org-a" />);
+    fireEvent.click(await screen.findByRole("switch", { name: "Enable intake" }));
+    await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(1));
+    expect(mocks.configure.mock.calls[0][1]).toMatchObject({
+      expected_revision: 1,
+      enabled: false,
+      reviewer_ids: ["lawyer-a"],
+    });
+  });
+
+  it("explains that requests wait for a Legal team", async () => {
+    mocks.configuration.mockResolvedValue({
+      ...configuration(),
+      has_team: false,
+      reviewer_ids: [],
+    });
+    render(<Inbox orgId="org-a" />);
+    expect(
+      await screen.findByText(
+        "Choose a Legal team in Intake settings before requests can be sent.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New request" })).toBeDisabled();
+  });
+
+  it("cancels a request from its row menu after confirmation", async () => {
+    const user = userEvent.setup();
+    mocks.list.mockResolvedValue([
+      request({
+        version: 4,
+        capabilities: { ...request().capabilities, cancel: true },
+      }),
+    ]);
+    render(<Inbox orgId="org-a" />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Actions for Confidential request A",
+      }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Cancel request" }));
+    expect(mocks.command).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel request" }));
+    await waitFor(() =>
+      expect(mocks.command).toHaveBeenCalledWith(
+        "org-a",
+        "request-a",
+        "cancel",
+        expect.objectContaining({ expected_version: 4 }),
+      ),
+    );
   });
 });
 
@@ -295,22 +411,16 @@ describe("request forms and list loading", () => {
         is_reviewer: true,
       },
     ]);
+    const user = userEvent.setup();
     render(<Inbox orgId="org-a" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Legal queue" }));
-    const filter = screen.getByRole("combobox", {
-      name: "Filter by assigned lawyer",
-    });
+    await user.click(await screen.findByRole("button", { name: "Legal queue" }));
+    await user.click(
+      screen.getByRole("button", { name: "Filter by assigned lawyer" }),
+    );
     expect(
-      Array.from((filter as HTMLSelectElement).options, (option) => ({
-        label: option.text,
-        value: option.value,
-      })),
-    ).toEqual([
-      { label: "All assigned lawyers", value: "" },
-      { label: "Owner Reviewer", value: "owner-reviewer" },
-      { label: "Lawyer A", value: "lawyer-a" },
-    ]);
-    fireEvent.change(filter, { target: { value: "lawyer-a" } });
+      screen.getAllByRole("menuitem").map((item) => item.textContent),
+    ).toEqual(["All assigned lawyers", "Owner Reviewer", "Lawyer A"]);
+    await user.click(screen.getByRole("menuitem", { name: "Lawyer A" }));
     await waitFor(() =>
       expect(mocks.list).toHaveBeenLastCalledWith(
         "org-a",
@@ -333,7 +443,7 @@ describe("request forms and list loading", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Could not load requests.",
     );
-    expect(screen.queryByText("No requests found.")).not.toBeInTheDocument();
+    expect(screen.queryByText(EMPTY_INBOX)).not.toBeInTheDocument();
   });
 
   it("asks before closing a draft and retains its text when declined", async () => {
@@ -345,11 +455,11 @@ describe("request forms and list loading", () => {
     fireEvent.change(screen.getByLabelText("Subject"), {
       target: { value: "Unsent question" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(window.confirm).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText("Subject")).toHaveValue("Unsent question");
     vi.mocked(window.confirm).mockReturnValue(true);
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByLabelText("Subject")).not.toBeInTheDocument();
     expect(mocks.submit).not.toHaveBeenCalled();
   });
@@ -415,7 +525,7 @@ describe("request forms and list loading", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Loading requests");
     await act(async () => next.resolve([]));
-    expect(screen.getByText("No requests found.")).toBeInTheDocument();
+    expect(screen.getByText(EMPTY_INBOX)).toBeInTheDocument();
   });
 
   it("rejects stale A responses across A to B to A workspace navigation", async () => {
@@ -454,9 +564,9 @@ describe("reviewer draft, preview and recovery", () => {
     render(<Detail orgId="org-a" requestId="request-a" />);
     const editor = await screen.findByLabelText("Message to the requester");
     fireEvent.change(editor, { target: { value: "Unsent answer" } });
-    fireEvent.change(screen.getByLabelText("Assigned lawyer"), {
-      target: { value: "lawyer-b" },
-    });
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText("Assigned lawyer"));
+    await user.click(screen.getByRole("menuitem", { name: "Lawyer B" }));
     fireEvent.click(screen.getByRole("button", { name: "Save assignment" }));
     await waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(2));
     expect(screen.getByLabelText("Message to the requester")).toHaveValue(
@@ -597,12 +707,13 @@ describe("reviewer draft, preview and recovery", () => {
 });
 
 it("filters the Legal queue by current reviewer", async () => {
+  const user = userEvent.setup();
   render(<Inbox orgId="org-a" />);
-  fireEvent.click(await screen.findByRole("button", { name: "Legal queue" }));
-  fireEvent.change(
-    await screen.findByRole("combobox", { name: "Filter by assigned lawyer" }),
-    { target: { value: "lawyer-b" } },
+  await user.click(await screen.findByRole("button", { name: "Legal queue" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Filter by assigned lawyer" }),
   );
+  await user.click(screen.getByRole("menuitem", { name: "Lawyer B" }));
   await waitFor(() =>
     expect(mocks.list).toHaveBeenLastCalledWith(
       "org-a",
@@ -628,13 +739,11 @@ describe("history navigation recovery", () => {
     fireEvent.change(screen.getByLabelText("What do you need help with?"), {
       target: { value: "Private request" },
     });
-    fireEvent.change(screen.getByLabelText("Request type"), {
-      target: { value: "nda" },
-    });
-    fireEvent.change(screen.getByLabelText(/Business target date/), {
+    fireEvent.click(screen.getByRole("button", { name: "NDA request" }));
+    fireEvent.change(screen.getByLabelText("Target date (optional)"), {
       target: { value: "2026-11-10" },
     });
-    fireEvent.change(screen.getByLabelText("Confirm timezone"), {
+    fireEvent.change(screen.getByLabelText("Timezone"), {
       target: { value: "Europe/Stockholm" },
     });
     first.unmount();
@@ -643,15 +752,16 @@ describe("history navigation recovery", () => {
     expect(screen.getByLabelText("What do you need help with?")).toHaveValue(
       "Private request",
     );
-    expect(screen.getByLabelText("Request type")).toHaveValue("nda");
-    expect(screen.getByLabelText(/Business target date/)).toHaveValue(
+    expect(screen.getByRole("button", { name: "NDA request" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByLabelText("Target date (optional)")).toHaveValue(
       "2026-11-10",
     );
-    expect(screen.getByLabelText("Confirm timezone")).toHaveValue(
-      "Europe/Stockholm",
-    );
+    expect(screen.getByLabelText("Timezone")).toHaveValue("Europe/Stockholm");
     vi.mocked(window.confirm).mockReturnValue(true);
-    fireEvent.click(screen.getByRole("button", { name: /^Close$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "New request" })).toBeEnabled(),
     );
@@ -661,16 +771,16 @@ describe("history navigation recovery", () => {
 
   it("keeps configuration selections at their original revision after remount", async () => {
     mocks.configuration.mockResolvedValue(configuration(1));
-    const first = render(<Settings orgId="org-a" />);
+    const first = render(<IntakeTeamModal orgId="org-a" onClose={() => {}} />);
     fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
     first.unmount();
     mocks.configuration.mockResolvedValue(configuration(2));
-    render(<Settings orgId="org-a" />);
+    render(<IntakeTeamModal orgId="org-a" onClose={() => {}} />);
     expect(
       await screen.findByRole("checkbox", { name: /Lawyer B/ }),
     ).toBeChecked();
     fireEvent.click(
-      screen.getByRole("button", { name: "Save intake settings" }),
+      screen.getByRole("button", { name: "Save" }),
     );
     await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(1));
     expect(mocks.configure.mock.calls[0][1]).toMatchObject({
@@ -759,16 +869,16 @@ it("keeps the acknowledged settings revision if editing resumes during refresh",
     request_id: null,
     applied_version: 2,
   });
-  render(<Settings orgId="org-a" />);
+  render(<IntakeTeamModal orgId="org-a" onClose={() => {}} />);
   fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Save intake settings" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(mocks.configuration).toHaveBeenCalledTimes(2));
-  fireEvent.click(screen.getByRole("checkbox", { name: "Enable intake" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /Lawyer A/ }));
   await act(async () => refresh.resolve(configuration(2)));
-  fireEvent.click(screen.getByRole("button", { name: "Save intake settings" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(2));
   expect(mocks.configure.mock.calls[1][1]).toMatchObject({
     expected_revision: 2,
-    enabled: false,
+    reviewer_ids: ["lawyer-b"],
   });
 });

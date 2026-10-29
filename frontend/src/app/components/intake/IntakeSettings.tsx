@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { useIntakeMemory, useIntakeDraft } from "./useIntakeMemory";
 import type {
   IntakeConfiguration,
   IntakeReviewer,
   IntakeConfigurationCommand,
 } from "@mike/contracts";
-import { useOrganizationSettings } from "@/app/components/organizations/OrganizationSettingsShell";
 import { useWorkspace } from "@/app/contexts/WorkspaceContext";
 import {
   configureIntake,
@@ -14,25 +14,39 @@ import {
   getIntakeReviewers,
   isMfaRequiredError,
 } from "@/app/lib/mikeApi";
+import { Modal } from "@/app/components/modals/Modal";
 import { MfaVerificationPopup } from "@/app/components/popups/MfaVerificationPopup";
-import { TABLE_CHECKBOX_CLASS } from "@/app/components/shared/TablePrimitive";
+import {
+  SkeletonLine,
+  TABLE_CHECKBOX_CLASS,
+} from "@/app/components/shared/TablePrimitive";
+import { SettingsRow } from "@/app/components/settings/SettingsRow";
+import {
+  SettingsDescription,
+  SettingsLabel,
+} from "@/app/components/settings/SettingsText";
+import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { PillButtonUI } from "@/shared/ui/PillButtonUI";
+import { ToggleSwitchUI } from "@/shared/ui/ToggleSwitchUI";
+import { LIQUID_GLASS_MODAL_ROW_HOVER_CLASS } from "@/shared/ui/LiquidGlassUI";
 import {
   intakeError,
   useIntakeDraftWarning,
   useIntakeOperation,
 } from "./useIntakeOperation";
-/** Mount owner-only intake settings with account and organization draft isolation. */
-export function IntakeSettings() {
-  const { orgId, org } = useOrganizationSettings();
-  const { accountId } = useWorkspace();
-  if (!accountId || org?.role !== "owner")
-    return <p>Only organization owners can configure intake.</p>;
-  return <Settings key={`${accountId}:${orgId}`} orgId={orgId} />;
-}
-/** Keep reviewer edits bound to their loaded configuration revision through conflicts. */
-export function Settings({ orgId }: { orgId: string }) {
-  const memory = useIntakeMemory(orgId, "settings");
+
+/**
+ * The owner's intake configuration: the on/off switch and the Legal team.
+ * Edits stay bound to the configuration revision they were made against, so
+ * another owner's change is never silently overwritten, and an uncertain or
+ * MFA-interrupted save is replayed with the exact same command.
+ */
+function useIntakeConfigurationEditor(
+  orgId: string,
+  scope: string,
+  onSaved?: () => void,
+) {
+  const memory = useIntakeMemory(orgId, scope);
   const [baseRevision, setBaseRevision] = useIntakeDraft<number | null>(
     memory,
     "revision",
@@ -64,6 +78,7 @@ export function Settings({ orgId }: { orgId: string }) {
       setConflict(false);
       setReload((x) => x + 1);
       window.dispatchEvent(new Event("mike:intake-configured"));
+      onSaved?.();
     },
     (error) => {
       if (isMfaRequiredError(error)) setMfa(true);
@@ -94,8 +109,10 @@ export function Settings({ orgId }: { orgId: string }) {
         setPeople(p);
         setError(null);
         if (!memory.values.get("dirty") && !memory.pending) {
+          const roster = c.reviewer_ids ?? [];
           setEnabled(c.enabled);
-          setSelected(c.reviewer_ids ?? []);
+          // Until an owner narrows it, the Legal team is everyone.
+          setSelected(roster.length > 0 ? roster : p.map((x) => x.user_id));
           setBaseRevision(c.revision ?? null);
         }
       })
@@ -120,164 +137,273 @@ export function Settings({ orgId }: { orgId: string }) {
       return receipt;
     });
   }
-  if (error)
-    return (
-      <div role="alert">
-        {error}{" "}
-        <PillButtonUI tone="black" onClick={() => setReload((x) => x + 1)}>
-          Try again
-        </PillButtonUI>
-        {operation.uncertain && (
-          <p role="status">
-            The previous save is still unconfirmed.{" "}
-            <PillButtonUI
-              tone="black"
-              disabled={operation.busy}
-              onClick={() => void operation.execute()}
-            >
-              Check again
-            </PillButtonUI>
-          </p>
-        )}
-      </div>
-    );
-  if (!config) return <p role="status">Loading intake settings…</p>;
-  if (!config.can_configure)
-    return <p>Only organization owners can configure intake.</p>;
-  return (
-    <form
-      className="space-y-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const body = {
-          command_id: crypto.randomUUID(),
-          expected_revision: baseRevision!,
-          enabled,
-          reviewer_ids: [...selected],
-        };
-        save(body);
+  function submit(next: { enabled: boolean; reviewer_ids: string[] }) {
+    save({
+      command_id: crypto.randomUUID(),
+      expected_revision: baseRevision!,
+      ...next,
+    });
+  }
+  const mfaPopup = (
+    <MfaVerificationPopup
+      open={mfa}
+      onCancel={() => setMfa(false)}
+      onVerified={() => {
+        setMfa(false);
+        if (operation.uncertain) void operation.execute();
+        else if (submitted) save(submitted);
       }}
-    >
-      <h2 className="font-serif text-2xl">Legal requests</h2>
-      <p className="text-sm">
-        Choose who handles requests. Everyone on the Legal team can read the
-        entire queue. Requesters can only see their own requests. This is not
-        suitable for matters requiring separate access restrictions.
-      </p>
-      <p className="text-sm">
-        Owners can add themselves to Legal; roster changes are recorded.
-        Requests belong to the organization and stay when someone leaves. Their
-        access ends immediately. Account deletion clears identity links, but
-        does not remove names typed in messages.
-      </p>
-      <label className="flex items-center gap-2">
-        <input
-          className={TABLE_CHECKBOX_CLASS}
-          type="checkbox"
-          checked={enabled}
-          disabled={operation.locked || mfa || conflict}
-          onChange={(e) => {
-            const checked = e.target.checked;
-            setDirty(true);
-            setEnabled(checked);
-          }}
-        />
-        Enable intake
-      </label>
-      <fieldset
-        disabled={operation.locked || mfa || conflict}
-        className="space-y-3"
-      >
-        <legend className="mb-3">Legal team</legend>
-        {people.map((p) => (
-          <label
-            className="flex items-start gap-2 [overflow-wrap:anywhere]"
-            key={p.user_id}
-          >
-            <input
-              className={TABLE_CHECKBOX_CLASS}
-              type="checkbox"
-              checked={selected.includes(p.user_id)}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setDirty(true);
-                setSelected((s) =>
-                  checked
-                    ? [...s, p.user_id]
-                    : s.filter((id) => id !== p.user_id),
-                );
-              }}
-            />
-            <span>
-              {p.display_name ?? "Member"}
-              <span className="block text-sm">{p.email}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
-      {enabled && selected.length === 0 && (
-        <p role="alert">Select at least one Legal team member.</p>
-      )}
-      <p className="text-sm">
-        Disabling intake pauses changes and new requests. Existing records stay
-        readable. Deleting the organization uses its 30-day recovery period,
-        followed by permanent deletion. Privacy & Data also lets an owner delete
-        request data.
-      </p>
-      {conflict && (
-        <p role="alert">
-          The settings could not be saved. Reload the current settings before
-          making changes.{" "}
-          <PillButtonUI
-            tone="black"
-            type="button"
-            disabled={operation.locked}
-            onClick={() => {
-              if (confirmDiscard()) {
-                setDirty(false);
-                setConflict(false);
-                setReload((x) => x + 1);
-              }
-            }}
-          >
-            Reload settings
+    />
+  );
+  function reloadSettings() {
+    if (confirmDiscard()) {
+      setDirty(false);
+      setConflict(false);
+      setReload((x) => x + 1);
+    }
+  }
+  return {
+    config,
+    people,
+    error,
+    enabled,
+    setEnabled,
+    selected,
+    setSelected,
+    setDirty,
+    conflict,
+    operation,
+    locked: operation.locked || mfa || conflict,
+    confirmDiscard,
+    submit,
+    retry: () => setReload((x) => x + 1),
+    reloadSettings,
+    mfaPopup,
+  };
+}
+
+/** The Features tab's intake switch, for organization owners. */
+export function IntakeFeatureSetting({ orgId }: { orgId: string }) {
+  const { accountId } = useWorkspace();
+  if (!accountId) return null;
+  return <FeatureSwitch key={`${accountId}:${orgId}`} orgId={orgId} />;
+}
+
+function FeatureSwitch({ orgId }: { orgId: string }) {
+  const editor = useIntakeConfigurationEditor(orgId, "feature");
+  const { config } = editor;
+  return (
+    <>
+      <SettingsRow>
+        <div className="min-w-0 space-y-1">
+          <SettingsLabel>Intake</SettingsLabel>
+          <SettingsDescription>
+            Let members send NDA requests and legal questions to the Legal team.
+          </SettingsDescription>
+          {editor.error && (
+            <p className="text-sm text-red-600" role="alert">
+              {editor.error}
+            </p>
+          )}
+          {editor.conflict && (
+            <p className="text-sm text-red-600" role="alert">
+              The setting changed elsewhere. Reload it and try again.
+            </p>
+          )}
+          {editor.operation.uncertain && (
+            <p className="text-sm text-gray-500" role="status">
+              Checking whether the change was saved.
+            </p>
+          )}
+        </div>
+        {editor.error ? (
+          <PillButtonUI tone="white" size="sm" onClick={editor.retry}>
+            Try again
           </PillButtonUI>
-        </p>
-      )}
-      <MfaVerificationPopup
-        open={mfa}
-        onCancel={() => setMfa(false)}
-        onVerified={() => {
-          setMfa(false);
-          if (operation.uncertain) void operation.execute();
-          else if (submitted) save(submitted);
-        }}
-      />
-      {operation.uncertain && (
-        <p role="status">
-          Checking whether it was saved.{" "}
+        ) : editor.conflict ? (
+          <PillButtonUI tone="white" size="sm" onClick={editor.reloadSettings}>
+            Reload
+          </PillButtonUI>
+        ) : editor.operation.uncertain ? (
           <PillButtonUI
-            tone="black"
-            type="button"
-            disabled={operation.busy}
-            onClick={() => void operation.execute()}
+            tone="white"
+            size="sm"
+            disabled={editor.operation.busy}
+            onClick={() => void editor.operation.execute()}
           >
             Check again
           </PillButtonUI>
-        </p>
-      )}
-      <PillButtonUI
-        tone="black"
-        type="submit"
-        disabled={
-          operation.locked ||
-          mfa ||
-          conflict ||
-          (enabled && selected.length === 0)
+        ) : config?.can_configure ? (
+          <ToggleSwitchUI
+            checked={editor.enabled}
+            aria-label="Enable intake"
+            disabled={editor.locked}
+            aria-busy={editor.operation.busy}
+            onCheckedChange={(next) => {
+              editor.setDirty(true);
+              editor.setEnabled(next);
+              // The switch never changes the Legal team; owners choose it
+              // from Intake settings.
+              editor.submit({
+                enabled: next,
+                reviewer_ids: config.reviewer_ids ?? [],
+              });
+            }}
+          />
+        ) : (
+          <div
+            className="h-5 w-9 shrink-0 animate-pulse rounded-full bg-app-surface"
+            aria-hidden="true"
+          />
+        )}
+      </SettingsRow>
+      {editor.mfaPopup}
+    </>
+  );
+}
+
+/** Choose the Legal team, from the Intake page's settings button. */
+export function IntakeTeamModal({
+  orgId,
+  onClose,
+}: {
+  orgId: string;
+  onClose: () => void;
+}) {
+  const editor = useIntakeConfigurationEditor(orgId, "settings", onClose);
+  const { config, people, selected, operation } = editor;
+  const empty = editor.enabled && selected.length === 0;
+  function close() {
+    if (operation.locked) return;
+    if (editor.confirmDiscard()) onClose();
+  }
+  return (
+    <>
+      <Modal
+        open
+        onClose={close}
+        breadcrumbs={["Intake", "Legal team"]}
+        footerStatus={
+          operation.uncertain ? (
+            <span role="status">Checking whether it was saved.</span>
+          ) : editor.conflict ? (
+            <span role="alert">The settings changed elsewhere.</span>
+          ) : undefined
         }
+        secondaryAction={
+          operation.uncertain
+            ? {
+                label: "Check again",
+                onClick: () => void operation.execute(),
+                disabled: operation.busy,
+              }
+            : editor.conflict
+              ? {
+                  label: "Reload settings",
+                  onClick: editor.reloadSettings,
+                  disabled: operation.locked,
+                }
+              : undefined
+        }
+        primaryAction={
+          config?.can_configure
+            ? {
+                label: operation.busy ? "Saving…" : "Save",
+                icon: operation.busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : undefined,
+                onClick: () =>
+                  editor.submit({
+                    enabled: editor.enabled,
+                    reviewer_ids: [...selected],
+                  }),
+                disabled: editor.locked || empty,
+              }
+            : undefined
+        }
+        cancelAction={{
+          label: "Cancel",
+          onClick: close,
+          disabled: operation.locked,
+        }}
       >
-        Save intake settings
-      </PillButtonUI>
-    </form>
+        <div
+          data-modal-scroll="vertical"
+          className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-4"
+        >
+          <p className="text-sm text-gray-500">
+            Legal team members can see and answer every request.
+          </p>
+          {editor.error ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-red-600" role="alert">
+                {editor.error}
+              </p>
+              <PillButtonUI tone="white" size="sm" onClick={editor.retry}>
+                Try again
+              </PillButtonUI>
+            </div>
+          ) : !config ? (
+            <div className="space-y-3">
+              <span role="status" className="sr-only">
+                Loading intake settings…
+              </span>
+              {["w-32", "w-40", "w-28"].map((width) => (
+                <div key={width} className="flex items-center gap-3 px-2">
+                  <SkeletonLine className="w-4" />
+                  <SkeletonLine className={width} />
+                </div>
+              ))}
+            </div>
+          ) : !config.can_configure ? (
+            <p className="text-sm text-gray-500">
+              Only organization owners can choose the Legal team.
+            </p>
+          ) : (
+            <fieldset disabled={editor.locked} className="space-y-1">
+              <legend className="sr-only">Legal team</legend>
+              {people.map((p) => (
+                <label
+                  key={p.user_id}
+                  className={`flex min-w-0 cursor-pointer items-center gap-3 rounded-lg px-2 py-2 ${LIQUID_GLASS_MODAL_ROW_HOVER_CLASS}`}
+                >
+                  <input
+                    className={TABLE_CHECKBOX_CLASS}
+                    type="checkbox"
+                    checked={selected.includes(p.user_id)}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      editor.setDirty(true);
+                      editor.setSelected((s) =>
+                        checked
+                          ? [...s, p.user_id]
+                          : s.filter((id) => id !== p.user_id),
+                      );
+                    }}
+                  />
+                  <UserAvatar name={p.display_name} email={p.email} />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-gray-700 [overflow-wrap:anywhere]">
+                      {p.display_name ?? "Member"}
+                    </span>
+                    {p.email && (
+                      <span className="block text-xs text-gray-500 [overflow-wrap:anywhere]">
+                        {p.email}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          )}
+          {empty && (
+            <p className="text-sm text-red-600" role="alert">
+              Select at least one Legal team member.
+            </p>
+          )}
+        </div>
+      </Modal>
+      {editor.mfaPopup}
+    </>
   );
 }
