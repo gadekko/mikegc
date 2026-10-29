@@ -1,15 +1,15 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/app/lib/utils";
 
 const HEADING_FONT_CLASS = "font-light font-serif";
 
 /**
- * The name at the top of the sidebar: "Mike" for personal work, or the
+ * The name at the top of the sidebar: "MikeGC" for personal work, or the
  * active organization's name.
  *
- * Every name is set at the size "Mike" is, so switching workspace does not
+ * Every name is set at the size "MikeGC" is, so switching workspace does not
  * change the look of the header. Only a name too long for one line at that
  * size drops to the smaller two-line setting, because the header row keeps a
  * fixed height. Whether it fits is measured rather than guessed from the
@@ -19,9 +19,13 @@ const HEADING_FONT_CLASS = "font-light font-serif";
 export function SidebarHeading({
     name,
     className,
+    children,
 }: {
     name: string;
     className?: string;
+    /** The name styled for display, such as the MikeGC wordmark. Its text
+        must be `name`, which is still what gets measured. */
+    children?: ReactNode;
 }) {
     const containerRef = useRef<HTMLSpanElement>(null);
     const measureRef = useRef<HTMLSpanElement>(null);
@@ -61,7 +65,7 @@ export function SidebarHeading({
                     className,
                 )}
             >
-                {name}
+                {children ?? name}
             </span>
             {/* The name at full size on one line, out of flow and unseen:
                 its width is what the room available is compared with. */}

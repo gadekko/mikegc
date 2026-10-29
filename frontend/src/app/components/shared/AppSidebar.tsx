@@ -527,7 +527,16 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                                                 ? "sidebar-heading-enter"
                                                 : undefined
                                         }
-                                    />
+                                    >
+                                        {activeOrganization ? undefined : (
+                                            <>
+                                                Mike
+                                                <span className="text-(--brand-accent-text)">
+                                                    GC
+                                                </span>
+                                            </>
+                                        )}
+                                    </SidebarHeading>
                                 )}
                             </Link>
                         </div>

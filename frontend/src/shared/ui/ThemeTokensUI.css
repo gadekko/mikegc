@@ -47,8 +47,10 @@
     --spreadsheet-highlight-background: rgba(59, 130, 246, 0.16);
     --spreadsheet-highlight-outline: #3b82f6;
 
-    /* The "GC" in the MikeGC wordmark: the walnut of the mark's fill. */
-    --brand-accent-text: #5c3a24;
+    /* The "GC" in the MikeGC wordmark: a walnut a few steps lighter than the
+       mark's fill, so it still reads as brown beside near-black "Mike" in a
+       thin serif (5.5:1 on the app surface). */
+    --brand-accent-text: #8b5e3c;
 }
 
 .dark {
