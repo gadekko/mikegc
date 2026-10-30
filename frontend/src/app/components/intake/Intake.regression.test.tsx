@@ -356,6 +356,26 @@ describe("intake defaults and table actions", () => {
     });
   });
 
+  it("shows the saved intake setting again after a definitive rejection", async () => {
+    mocks.configure.mockRejectedValueOnce({
+      status: 429,
+      code: "rate_limited",
+    });
+    render(<IntakeFeatureSetting orgId="org-a" />);
+    const toggle = await screen.findByRole("switch", { name: "Enable intake" });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("switch", { name: "Enable intake" }),
+      ).toBeChecked(),
+    );
+    expect(
+      screen.getByRole("switch", { name: "Enable intake" }),
+    ).toBeEnabled();
+  });
+
   it("explains that requests wait for a Legal team", async () => {
     mocks.configuration.mockResolvedValue({
       ...configuration(),

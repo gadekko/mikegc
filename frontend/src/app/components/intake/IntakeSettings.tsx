@@ -99,6 +99,12 @@ function useIntakeConfigurationEditor(
             ? error.code
             : null;
         if (status === 409 && code === "intake_conflict") setConflict(true);
+        // The switch saves on each change, so after a definitive rejection it
+        // shows the server's value again. The Legal team draft stays for retry.
+        else if (scope === "feature" && !memory.uncertain && config) {
+          setEnabled(config.enabled);
+          setDirty(false);
+        }
       }
     },
     memory,
