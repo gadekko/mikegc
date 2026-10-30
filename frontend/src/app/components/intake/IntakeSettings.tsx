@@ -92,7 +92,13 @@ function useIntakeConfigurationEditor(
           setPeople([]);
           setError(intakeError(error));
         }
-        setConflict(true);
+        // Only a stale revision needs a reload. Other rejections are already
+        // reported and must not hide "Check again" or block saving.
+        const code =
+          error && typeof error === "object" && "code" in error
+            ? error.code
+            : null;
+        if (status === 409 && code === "intake_conflict") setConflict(true);
       }
     },
     memory,

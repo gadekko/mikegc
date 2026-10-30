@@ -10826,7 +10826,8 @@ grant execute on function public.queue_document_text(uuid,boolean),public.backfi
 select public.backfill_document_text(100,false);
 
 -- Migration date: 2026-10-26
--- Opt-in, organization-owned legal requests. All entry points are server-only.
+-- Organization-owned legal requests, on unless an owner switches them off. All
+-- entry points are server-only.
 create table if not exists public.intake_settings (
   org_id uuid primary key references public.organizations(id) on delete cascade,
   enabled boolean not null default true,

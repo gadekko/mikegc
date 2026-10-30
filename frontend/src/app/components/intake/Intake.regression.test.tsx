@@ -244,6 +244,22 @@ describe("configuration revisions and MFA", () => {
     );
   });
 
+  it("treats only a stale revision as a conflict that needs a reload", async () => {
+    mocks.configure.mockRejectedValueOnce({
+      status: 429,
+      code: "rate_limited",
+    });
+    render(<IntakeTeamModal orgId="org-a" onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Lawyer B/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mocks.configure).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(
+      screen.queryByRole("button", { name: "Reload settings" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
   it("reconciles the original uncertain command after an MFA challenge", async () => {
     mocks.configure
       .mockRejectedValueOnce(new TypeError("Lost response"))

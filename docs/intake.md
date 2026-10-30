@@ -104,10 +104,15 @@ Apply migrations before starting the new application build:
   trigger's Auth-table read under the trusted trigger owner. It leaves actor
   authorization unchanged and does not grant general access to `auth.users`.
 - `20261026_01_intake_requests.sql` adds the intake schema, commands and lifecycle.
+- `20261029_01_intake_on_by_default.sql` turns intake on by default and keeps it
+  on when the last Legal reviewer leaves.
+- `20261030_01_private_access_cleanup_auth_role.sql` lets Auth delete accounts
+  that own projects, chats or other work by running the private-content cleanup
+  trigger under its trusted owner.
 
 Use the existing migration runner documented in [deployment.md](deployment.md).
 Do not replay historical migrations over a fresh schema. Fresh installations use
-`backend/schema.sql`, including both migrations in its ledger.
+`backend/schema.sql`, including these migrations in its ledger.
 
 Test with a synthetic organization first. Intake is on by default, but no
 request can be sent until an owner chooses a Legal team, so a real pilot still
